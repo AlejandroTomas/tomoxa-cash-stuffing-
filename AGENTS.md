@@ -35,6 +35,7 @@ módulo se puede quitar sin romper el resto (después de quitar: `pnpm verify &&
 | **Bienvenida** (`/`) | Página de inicio de la plantilla | Reemplaza `src/app/page.tsx` por la del proyecto |
 | **Login de ejemplo** (`/login`, `features/auth`) | Flujo completo: react-hook-form + Zod → thunk → service → `core/session` | **El endpoint `app/api/auth/login` es de demostración** (acepta la contraseña `demo`): reemplázalo por tu autenticación real o borra `features/auth` y la ruta |
 | **Dashboard** (`/dashboard`) | Layout con menú lateral, `StatTile` y la sesión | Reemplázalo por el tablero del proyecto o bórralo junto con su ítem en `AdminLayout` |
+| **Organizador 3D** (`/organizer`, `features/organizer-3d`) | Carpeta 3D con sobres extraíbles (Three.js + GSAP), datos mock | Borra `src/features/organizer-3d`, `src/app/organizer`, `public/assets/organizer`, su ítem en `AdminLayout` y `pnpm remove three gsap @types/three` |
 | **Outbox** (`core/sync`) | Guardar sin conexión y subir después | Viene **apagado**. Para quitarlo del todo: `src/core/sync/README.md` → "¿Lo necesito?" |
 | **Importar Excel** | Modal de carga con mapeo de columnas | Borra `components/import` y `pnpm remove xlsx` |
 | **Tabla paginada + filtros** | Listados con búsqueda, filtros, orden | Borra `components/compound/PaginatedTable` y `components/filters` |

@@ -26,6 +26,7 @@ import {
   LayoutGrid,
   ListChecks,
   LayoutDashboard,
+  Wallet,
 } from "lucide-react";
 
 const icons = {
@@ -38,6 +39,7 @@ const icons = {
   layoutGrid: LayoutGrid,
   listChecks: ListChecks,
   layoutDashboard: LayoutDashboard,
+  wallet: Wallet,
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────────

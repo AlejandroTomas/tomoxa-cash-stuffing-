@@ -81,6 +81,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "node_modules/",
     "public/sw.js",
+    // Starter independiente del organizador 3D (ya integrado en src/features/organizer-3d).
+    "aurora-organizer-3d/**",
   ]),
 ]);
 
