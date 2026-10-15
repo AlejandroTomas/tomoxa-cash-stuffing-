@@ -1,0 +1,204 @@
+/* Toasts notch (Sileo parcheado). Colores de estado: ver core/toast/tokens.ts. */
+/* Sileo's SVG path supplies the concave shoulders; CSS pins it to the edge. */
+[data-sileo-viewport][data-sileo-shape="notch"] {
+  padding: 0;
+  gap: 0;
+  max-width: none;
+  width: var(--sileo-width);
+  z-index: 1600;
+  --sileo-width: min(350px, calc(100vw - 32px));
+  --sileo-state-loading: #cbd5e1;
+  --sileo-state-success: #64d98b;
+  --sileo-state-error: #ff7979;
+  --sileo-state-warning: #f3cb6a;
+  --sileo-state-info: #83bfff;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"][data-position^="top"] {
+  top: 0;
+  bottom: auto;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"][data-position^="bottom"] {
+  top: auto;
+  bottom: 0;
+}
+
+/* Leave room for the SVG shoulders when the toast hugs a side. */
+[data-sileo-viewport][data-sileo-shape="notch"][data-position$="left"] {
+  left: 16px;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"][data-position$="right"] {
+  right: 16px;
+}
+
+/* A notch occupies one slot at the edge, including when IDs differ. */
+[data-sileo-viewport][data-sileo-shape="notch"] [data-sileo-toast] {
+  position: absolute;
+  top: 0;
+  margin: 0;
+  transform-origin: top center;
+  color: #f5f5f7;
+  text-align: left;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"][data-position^="bottom"]
+  [data-sileo-toast] {
+  top: auto;
+  bottom: 0;
+  transform-origin: bottom center;
+}
+
+/* Only the compact header catches the pointer before expansion. */
+[data-sileo-viewport][data-sileo-shape="notch"]
+  [data-sileo-toast][data-expanded="false"] {
+  pointer-events: none;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"]
+  [data-sileo-toast]:not(:last-child) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"]
+  [data-sileo-toast]:not([data-ready="true"]),
+[data-sileo-viewport][data-sileo-shape="notch"]
+  [data-sileo-toast][data-exiting="true"] {
+  transform: translateY(-100%);
+  margin: 0;
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"][data-position^="bottom"]
+  [data-sileo-toast]:not([data-ready="true"]),
+[data-sileo-viewport][data-sileo-shape="notch"][data-position^="bottom"]
+  [data-sileo-toast][data-exiting="true"] {
+  transform: translateY(100%);
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"]
+  [data-sileo-toast][data-ready="true"]:not([data-exiting="true"]) {
+  transform: translateY(0);
+}
+
+[data-sileo-shape="notch"] [data-sileo-svg] {
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.18));
+}
+
+[data-sileo-viewport][data-sileo-shape="notch"][data-position^="bottom"]
+  [data-sileo-svg] {
+  filter: drop-shadow(0 -6px 10px rgba(0, 0, 0, 0.18));
+}
+
+[data-sileo-shape="notch"] [data-sileo-header] {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  transform: none;
+  padding: 8px 14px;
+  width: var(--_pw);
+  justify-content: center;
+  pointer-events: auto;
+}
+
+[data-sileo-shape="notch"] [data-sileo-header-stack],
+[data-sileo-shape="notch"] [data-sileo-header-inner] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-sileo-shape="notch"] [data-sileo-title] {
+  color: #f5f5f7;
+  font-weight: 600;
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-sileo-shape="notch"] .notch-hover-icon {
+  flex-shrink: 0;
+  color: #aeb2bd;
+  pointer-events: none;
+}
+
+[data-sileo-shape="notch"] .notch-progress-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  white-space: nowrap;
+}
+
+[data-sileo-shape="notch"] .notch-progress-percentage {
+  display: inline-grid;
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+[data-sileo-shape="notch"] .notch-progress-percentage > span {
+  grid-area: 1 / 1;
+}
+
+[data-sileo-shape="notch"] .notch-progress-measure {
+  visibility: hidden;
+}
+
+[data-sileo-shape="notch"] [data-sileo-description] {
+  color: #aeb2bd;
+  padding: 12px 22px 22px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  max-height: min(420px, calc(100dvh - 64px));
+  overflow-y: auto;
+  content-visibility: visible;
+}
+
+[data-sileo-shape="notch"] [data-sileo-button] {
+  border-radius: 10px;
+  height: 32px;
+}
+
+[data-sileo-shape="notch"] [data-sileo-header]:focus-visible,
+[data-sileo-shape="notch"] [data-sileo-button]:focus-visible {
+  outline: 2px solid #83bfff;
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+@media (min-width: 768px) {
+  [data-sileo-viewport][data-sileo-shape="notch"] {
+    --sileo-width: min(680px, calc(100vw - 64px));
+  }
+
+  [data-sileo-shape="notch"] [data-sileo-description] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 20px;
+    padding: 12px 24px 20px;
+  }
+
+  [data-sileo-shape="notch"] [data-sileo-description]:has([data-sileo-button]) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  [data-sileo-shape="notch"] [data-sileo-button] {
+    margin-top: 0;
+    min-width: 72px;
+    padding-inline: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sileo-viewport][data-sileo-shape="notch"] [data-sileo-toast],
+  [data-sileo-viewport][data-sileo-shape="notch"] [data-sileo-toast] * {
+    /* Override Sileo's more specific animation/transition shorthands. */
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

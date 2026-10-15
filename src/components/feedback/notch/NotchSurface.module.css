@@ -1,0 +1,283 @@
+.viewport {
+  /* El desplazamiento al borde termina en 0 sin sobrepasarlo. */
+  --notch-edge-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --notch-spring-easing: linear(
+    0,
+    0.002 0.6%,
+    0.007 1.2%,
+    0.015 1.8%,
+    0.026 2.4%,
+    0.041 3.1%,
+    0.06 3.8%,
+    0.108 5.3%,
+    0.157 6.6%,
+    0.214 8%,
+    0.467 13.7%,
+    0.577 16.3%,
+    0.631 17.7%,
+    0.682 19.1%,
+    0.73 20.5%,
+    0.771 21.8%,
+    0.808 23.1%,
+    0.844 24.5%,
+    0.874 25.8%,
+    0.903 27.2%,
+    0.928 28.6%,
+    0.952 30.1%,
+    0.972 31.6%,
+    0.988 33.1%,
+    1.01 35.7%,
+    1.025 38.5%,
+    1.034 41.6%,
+    1.038 45%,
+    1.035 50.1%,
+    1.012 64.2%,
+    1.003 73%,
+    0.999 83.7%,
+    1
+  );
+  position: fixed;
+  z-index: 1600;
+  margin: 0;
+  padding: 0;
+  max-height: 100dvh;
+  overflow: visible;
+  outline: none;
+  width: min(350px, calc(100vw - 32px));
+  color: var(--notch-primary);
+  pointer-events: none;
+  font-family: inherit;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1599;
+  background: rgb(0 0 0 / 0.4);
+  animation: revealContent 200ms ease both;
+}
+
+.viewport[data-notch-edge="top"] {
+  top: 0;
+  bottom: auto;
+}
+.viewport[data-notch-edge="bottom"] {
+  top: auto;
+  bottom: 0;
+}
+.viewport[data-notch-align="left"] {
+  left: 16px;
+  right: auto;
+}
+.viewport[data-notch-align="right"] {
+  left: auto;
+  right: 16px;
+}
+.viewport[data-notch-align="center"] {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.frame {
+  position: relative;
+  height: var(--notch-panel-height);
+  transition: height 600ms var(--notch-spring-easing);
+}
+
+.viewport[data-notch-ready="false"] .frame {
+  visibility: hidden;
+  opacity: 0;
+}
+.viewport[data-notch-ready="true"] .frame {
+  animation: enterTop 396ms var(--notch-edge-easing) both;
+}
+.viewport[data-notch-ready="true"][data-notch-edge="bottom"] .frame {
+  animation-name: enterBottom;
+}
+.viewport[data-notch-exiting="true"] .frame {
+  animation: exitTop 396ms var(--notch-edge-easing) both;
+}
+.viewport[data-notch-exiting="true"][data-notch-edge="bottom"] .frame {
+  animation-name: exitBottom;
+}
+.viewport[data-notch-exiting="true"] .frame * {
+  pointer-events: none !important;
+}
+
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(var(--notch-shadow));
+}
+
+.viewport[data-notch-edge="bottom"] .canvas {
+  top: auto;
+  bottom: 0;
+  transform: scaleY(-1);
+}
+.shell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: auto;
+}
+.viewport[data-notch-edge="bottom"] .shell {
+  top: auto;
+  bottom: 0;
+}
+.header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  gap: 6px;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+  margin-inline: auto;
+  height: 32px;
+  text-align: left;
+}
+.badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--notch-status);
+  background: color-mix(in srgb, var(--notch-status) 20%, transparent);
+}
+.label {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.825rem;
+  font-weight: 600;
+  line-height: 1rem;
+}
+.labelMeasure {
+  display: block;
+  width: max-content;
+  visibility: hidden;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.labelLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.close {
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--notch-secondary);
+  border-radius: 10px;
+}
+.close:hover {
+  color: var(--notch-primary);
+  background: var(--notch-divider);
+}
+.close:focus-visible {
+  outline: 2px solid var(--notch-focus);
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+.body {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  width: 100%;
+  padding: 12px 22px 22px;
+  opacity: 0;
+  pointer-events: auto;
+}
+.viewport[data-notch-edge="bottom"] .body {
+  top: auto;
+  bottom: 40px;
+}
+.viewport[data-notch-ready="true"] .body {
+  animation: revealContent 360ms ease 180ms both;
+}
+
+@media (min-width: 768px) {
+  .viewport {
+    width: min(816px, calc(100vw - 64px));
+  }
+  .body {
+    padding: 12px 24px 20px;
+  }
+}
+@keyframes enterTop {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes revealContent {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes enterBottom {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes exitTop {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+@keyframes exitBottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewport *,
+  .viewport *::before,
+  .viewport *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}

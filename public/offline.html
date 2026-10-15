@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kronos | Sin conexion</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f172a;
+        --card: rgba(15, 23, 42, 0.88);
+        --text: #f8fafc;
+        --muted: #cbd5e1;
+        --accent: #14b8a6;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #e2e8f0;
+          --card: rgba(15, 23, 42, 0.92);
+          --text: #f8fafc;
+          --muted: #e2e8f0;
+          --accent: #0d9488;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+        background:
+          radial-gradient(
+            circle at 20% 20%,
+            rgba(20, 184, 166, 0.25),
+            transparent 42%
+          ),
+          radial-gradient(
+            circle at 80% 0%,
+            rgba(14, 116, 144, 0.28),
+            transparent 38%
+          ),
+          var(--bg);
+        color: var(--text);
+        padding: 24px;
+      }
+
+      .card {
+        width: min(640px, 100%);
+        border-radius: 18px;
+        background: var(--card);
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        padding: 28px;
+        backdrop-filter: blur(6px);
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 1.65rem;
+      }
+
+      p {
+        margin: 0;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      .actions {
+        margin-top: 22px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .hint {
+        margin-top: 14px;
+        font-size: 0.9rem;
+        color: #bfdbfe;
+        min-height: 1.3rem;
+      }
+
+      button,
+      a {
+        appearance: none;
+        border: 0;
+        border-radius: 10px;
+        text-decoration: none;
+        color: #f8fafc;
+        background: linear-gradient(135deg, var(--accent), #0ea5e9);
+        padding: 10px 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .ghost {
+        background: transparent;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card" role="main">
+      <h1>Sin conexion a internet</h1>
+      <p>
+        Kronos detecto una conexion inestable. Puedes continuar con contenido
+        cacheado y tus cambios se sincronizaran cuando vuelva la red.
+      </p>
+      <div class="actions">
+        <button id="retryButton" type="button">Reintentar</button>
+        <a class="ghost" href="/auth">Ir a inicio</a>
+      </div>
+      <p id="hint" class="hint" aria-live="polite"></p>
+    </main>
+
+    <script>
+      const hintEl = document.getElementById("hint");
+      const retryButton = document.getElementById("retryButton");
+
+      async function findCachedPage() {
+        if (!("caches" in window)) return null;
+
+        const allCacheNames = await caches.keys();
+        const preferredCacheNames = [
+          ...allCacheNames.filter((name) => name === "pages-cache"),
+          ...allCacheNames.filter((name) => name !== "pages-cache"),
+        ];
+
+        for (const cacheName of preferredCacheNames) {
+          try {
+            const cache = await caches.open(cacheName);
+            const keys = await cache.keys();
+
+            const candidate = keys.find((req) => {
+              const url = new URL(req.url);
+              return (
+                url.origin === location.origin &&
+                !url.pathname.endsWith("/offline.html") &&
+                !url.pathname.startsWith("/_next") &&
+                req.mode === "navigate"
+              );
+            });
+
+            if (candidate) {
+              return new URL(candidate.url).pathname;
+            }
+          } catch {
+            // Continuar con el siguiente cache
+          }
+        }
+
+        return null;
+      }
+
+      async function retryNavigation() {
+        hintEl.textContent = "";
+
+        if (navigator.onLine) {
+          window.location.reload();
+          return;
+        }
+
+        const cachedPage = await findCachedPage();
+        if (cachedPage) {
+          hintEl.textContent =
+            "Sin red: abriendo la ultima pagina disponible en cache...";
+          window.location.assign(cachedPage);
+          return;
+        }
+
+        hintEl.textContent =
+          "Sigues sin conexion y no hay una pagina cacheada disponible para abrir.";
+      }
+
+      retryButton.addEventListener("click", () => {
+        void retryNavigation();
+      });
+
+      window.addEventListener("online", () => {
+        hintEl.textContent = "Conexion restaurada. Reintentando...";
+        window.location.reload();
+      });
+    </script>
+  </body>
+</html>

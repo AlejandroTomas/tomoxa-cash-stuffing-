@@ -1,0 +1,735 @@
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index 4cf7fa59c0d7d7ac08783b5145058def705008ee..23100c3692fdb2a0a3cbf5123c5d1cf6e326c6b9 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -15,7 +15,9 @@ interface SileoButton {
+ declare const SILEO_POSITIONS: readonly ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"];
+ type SileoPosition = (typeof SILEO_POSITIONS)[number];
+ interface SileoOptions {
++    id?: string;
+     title?: string;
++    header?: ReactNode;
+     description?: ReactNode | string;
+     type?: SileoState;
+     position?: SileoPosition;
+@@ -34,6 +36,8 @@ interface SileoOptions {
+ type SileoOffsetValue = number | string;
+ type SileoOffsetConfig = Partial<Record<"top" | "right" | "bottom" | "left", SileoOffsetValue>>;
+ interface SileoToasterProps {
++    shape?: "notch";
++    expandIcon?: ReactNode;
+     children?: ReactNode;
+     position?: SileoPosition;
+     offset?: SileoOffsetValue | SileoOffsetConfig;
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 0c52a3a33f124bfaf35b18dc37777f4c9a314ecb..5a3fe3b5a4544d3c385004462ccbe1bfc8b24875 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -15,7 +15,9 @@ interface SileoButton {
+ declare const SILEO_POSITIONS: readonly ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"];
+ type SileoPosition = (typeof SILEO_POSITIONS)[number];
+ interface SileoOptions {
++    id?: string;
+     title?: string;
++    header?: ReactNode;
+     description?: ReactNode | string;
+     type?: SileoState;
+     position?: SileoPosition;
+@@ -34,6 +36,8 @@ interface SileoOptions {
+ type SileoOffsetValue = number | string;
+ type SileoOffsetConfig = Partial<Record<"top" | "right" | "bottom" | "left", SileoOffsetValue>>;
+ interface SileoToasterProps {
++    shape?: "notch";
++    expandIcon?: ReactNode;
+     children?: ReactNode;
+     position?: SileoPosition;
+     offset?: SileoOffsetValue | SileoOffsetConfig;
+diff --git a/dist/index.js b/dist/index.js
+index 79aa792998ed2f8917d4b46725af2b0bbab692e0..667383718893f70c5d576f43497c11753191954c 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,4 +1,5 @@
+ 'use client';
++const { notchPath } = require('./notch.js');
+ function __insertCSS(code) {
+   if (!code || typeof document == 'undefined') return
+   let head = document.head || document.getElementsByTagName('head')[0]
+@@ -189,12 +190,20 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+         })
+     });
+ });
+-/* ------------------------------- Component -------------------------------- */ const Sileo = /*#__PURE__*/ react.memo(function Sileo({ id, fill = "#FFFFFF", state = "success", title = state, description, position = "left", expand = "bottom", className, icon, styles, button, roundness, exiting = false, autoExpandDelayMs, autoCollapseDelayMs, canExpand, interruptKey, refreshKey, onMouseEnter, onMouseLeave, onDismiss }) {
++// Measure each child's natural content, including text hidden by ellipsis.
++const getNotchContentWidth = (element) => {
++    const children = Array.from(element.children);
++    const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
++    return Math.ceil(children.reduce((width, child) => width + Math.max(child.scrollWidth, child.offsetWidth ?? Math.round(child.getBoundingClientRect().width)), 0)
++        + gap * Math.max(0, children.length - 1));
++};
++/* ------------------------------- Component -------------------------------- */ const Sileo = /*#__PURE__*/ react.memo(function Sileo({ id, fill = "#FFFFFF", state = "success", title = state, description, position = "left", expand = "bottom", className, icon, header, styles, button, roundness, shape, expandIcon, exiting = false, autoExpandDelayMs, autoCollapseDelayMs, canExpand, interruptKey, refreshKey, onMouseEnter, onMouseLeave, onDismiss }) {
+     var _headerLayer_current_view_icon, _headerLayer_prev_view_icon;
+     var _headerLayer_current_view_styles, _headerLayer_current_view_styles1, _headerLayer_prev_view_styles, _headerLayer_prev_view_styles1, _view_styles, _view_styles1;
+     const next = react.useMemo(()=>({
+             title,
+             description,
++            header,
+             state,
+             icon,
+             styles,
+@@ -203,6 +212,7 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+         }), [
+         title,
+         description,
++        header,
+         state,
+         icon,
+         styles,
+@@ -214,12 +224,13 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+     const [isExpanded, setIsExpanded] = react.useState(false);
+     const [ready, setReady] = react.useState(false);
+     const [pillWidth, setPillWidth] = react.useState(0);
++    const [WIDTH, setNotchWidth] = react.useState(350);
+     const [contentHeight, setContentHeight] = react.useState(0);
+     const hasDesc = Boolean(view.description) || Boolean(view.button);
+     const isLoading = view.state === "loading";
+-    const open = hasDesc && isExpanded && !isLoading;
+-    const allowExpand = isLoading ? false : canExpand != null ? canExpand : !interruptKey || interruptKey === id;
+-    const headerKey = `${view.state}-${view.title}`;
++    const open = hasDesc && isExpanded && (!isLoading || shape === "notch");
++    const allowExpand = isLoading && shape !== "notch" ? false : canExpand != null ? canExpand : !interruptKey || interruptKey === id;
++    const headerKey = header != null && shape === "notch" ? `${view.state}-custom-header` : `${view.state}-${view.title}`;
+     const filterId = `sileo-gooey-${id}`;
+     const resolvedRoundness = Math.max(0, roundness != null ? roundness : DEFAULT_ROUNDNESS);
+     const blur = resolvedRoundness * BLUR_RATIO;
+@@ -254,7 +265,7 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+         }
+         const px = headerPadRef.current;
+         const measure = ()=>{
+-            const w = el.scrollWidth + px + PILL_PADDING;
++            const w = (shape === "notch" ? getNotchContentWidth(el) : el.scrollWidth) + px + PILL_PADDING;
+             if (w > PILL_PADDING) {
+                 setPillWidth((prev)=>prev === w ? prev : w);
+             }
+@@ -268,7 +279,7 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+                     const inner = innerRef.current;
+                     const pad = (_headerPadRef_current = headerPadRef.current) != null ? _headerPadRef_current : 0;
+                     if (!inner) return;
+-                    const w = inner.scrollWidth + pad + PILL_PADDING;
++                    const w = (shape === "notch" ? getNotchContentWidth(inner) : inner.scrollWidth) + pad + PILL_PADDING;
+                     if (w > PILL_PADDING) {
+                         setPillWidth((prev)=>prev === w ? prev : w);
+                     }
+@@ -283,7 +294,11 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+             pillObservedRef.current = el;
+         }
+     }, [
+-        headerLayer.current.key
++        headerLayer.current.key,
++        headerLayer.current.view.header,
++        shape,
++        expandIcon,
++        hasDesc
+     ]);
+     react.useEffect(()=>{
+         return ()=>{
+@@ -385,7 +400,12 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+             clearTimeout(swapTimerRef.current);
+             swapTimerRef.current = null;
+         }
+-        if (open) {
++        if (shape === "notch") {
++            // Keep a hovered/focused promise open while its state changes.
++            pendingRef.current = null;
++            setView(next);
++            setApplied(refreshKey);
++        } else if (open) {
+             pendingRef.current = {
+                 key: refreshKey,
+                 payload: next
+@@ -450,7 +470,7 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+     const expanded = open ? rawExpanded : frozenExpandedRef.current;
+     const svgHeight = hasDesc ? Math.max(expanded, minExpanded) : HEIGHT;
+     const expandedContent = Math.max(0, expanded - HEIGHT);
+-    const resolvedPillWidth = Math.max(pillWidth || HEIGHT, HEIGHT);
++    const resolvedPillWidth = shape === "notch" ? Math.min(WIDTH, Math.max(pillWidth, 176)) : Math.max(pillWidth || HEIGHT, HEIGHT);
+     const pillHeight = HEIGHT + blur * 3;
+     const pillX = position === "right" ? WIDTH - resolvedPillWidth : position === "center" ? (WIDTH - resolvedPillWidth) / 2 : 0;
+     /* ------------------------------- Memoised animate targets ----------------- */ const pillAnimate = react.useMemo(()=>({
+@@ -480,6 +500,16 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+         }, [
+         ready
+     ]);
++    const [reduceMotion, setReduceMotion] = react.useState(false);
++    react.useEffect(() => {
++        if (shape !== "notch") return;
++        const query = window.matchMedia("(prefers-reduced-motion: reduce)");
++        const update = () => setReduceMotion(query.matches);
++        update();
++        query.addEventListener("change", update);
++        return () => query.removeEventListener("change", update);
++    }, [shape]);
++    const notchAnimate = { d: notchPath(open ? 0 : pillX, open ? WIDTH : resolvedPillWidth, open ? expanded : HEIGHT, roundness == null ? 22 : resolvedRoundness) };
+     const viewBox = `0 0 ${WIDTH} ${svgHeight}`;
+     /* ------------------------------- Inline styles ---------------------------- */ const rootStyle = react.useMemo(()=>({
+             "--_h": `${open ? expanded : HEIGHT}px`,
+@@ -525,6 +555,15 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+     /* -------------------------------- Swipe ----------------------------------- */ const SWIPE_DISMISS = 30;
+     const SWIPE_MAX = 20;
+     const buttonRef = react.useRef(null);
++    react.useLayoutEffect(() => {
++        if (shape !== "notch" || !buttonRef.current) return;
++        const el = buttonRef.current;
++        const measure = () => setNotchWidth(el.clientWidth || 350);
++        measure();
++        const observer = new ResizeObserver(measure);
++        observer.observe(el);
++        return () => observer.disconnect();
++    }, [shape]);
+     const pointerStartRef = react.useRef(null);
+     const onDismissRef = react.useRef(onDismiss);
+     onDismissRef.current = onDismiss;
+@@ -582,8 +621,10 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+         exiting,
+         onDismiss
+     ]);
+-    /* --------------------------------- Render --------------------------------- */ return /*#__PURE__*/ jsxRuntime.jsxs("button", {
++    /* --------------------------------- Render --------------------------------- */ return /*#__PURE__*/ jsxRuntime.jsxs(shape === "notch" ? "div" : "button", {
+         ref: buttonRef,
++        role: shape === "notch" ? "group" : undefined,
++        "data-sileo-shape": shape,
+         type: "button",
+         "data-sileo-toast": true,
+         "data-ready": ready,
+@@ -594,10 +635,25 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+         "data-state": view.state,
+         className: className,
+         style: rootStyle,
+-        onMouseEnter: handleEnter,
+-        onMouseLeave: handleLeave,
++        onMouseEnter: shape === "notch" ? undefined : handleEnter,
++        onMouseLeave: shape === "notch" ? undefined : handleLeave,
++        onPointerEnter: shape === "notch" ? (event) => {
++            if (event.pointerType !== "touch") handleEnter(event);
++        } : undefined,
++        onPointerLeave: shape === "notch" ? (event) => {
++            if (event.pointerType !== "touch") handleLeave(event);
++        } : undefined,
+         onTransitionEnd: handleTransitionEnd,
+-        onPointerDown: handlePointerDown,
++        onPointerDown: shape === "notch" ? undefined : handlePointerDown,
++        onFocus: shape === "notch" ? (event) => {
++            if (event.target.matches(":focus-visible")) handleEnter(event);
++        } : undefined,
++        onBlur: shape === "notch" ? (event) => {
++            if (!event.currentTarget.contains(event.relatedTarget)) handleLeave(event);
++        } : undefined,
++        onKeyDown: shape === "notch" ? (event) => {
++            if (event.key === "Escape") onDismiss?.();
++        } : undefined,
+         children: [
+             /*#__PURE__*/ jsxRuntime.jsx("div", {
+                 "data-sileo-canvas": true,
+@@ -611,13 +667,19 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+                         /*#__PURE__*/ jsxRuntime.jsx("title", {
+                             children: "sileo notification"
+                         }),
+-                        /*#__PURE__*/ jsxRuntime.jsx(GooeyDefs, {
++                        /*#__PURE__*/ shape !== "notch" && jsxRuntime.jsx(GooeyDefs, {
+                             filterId: filterId,
+                             blur: blur,
+                             width: WIDTH,
+                             height: svgHeight
+                         }),
+-                        /*#__PURE__*/ jsxRuntime.jsxs("g", {
++                        /*#__PURE__*/ shape === "notch" ? jsxRuntime.jsx(react$1.motion.path, {
++                            "data-sileo-notch": true,
++                            fill: view.fill,
++                            initial: false,
++                            animate: notchAnimate,
++                            transition: reduceMotion ? { duration: 0 } : pillTransition
++                        }) : jsxRuntime.jsxs("g", {
+                             filter: `url(#${filterId})`,
+                             children: [
+                                 /*#__PURE__*/ jsxRuntime.jsx(react$1.motion.rect, {
+@@ -645,8 +707,15 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+                     ]
+                 })
+             }),
+-            /*#__PURE__*/ jsxRuntime.jsx("div", {
++            /*#__PURE__*/ jsxRuntime.jsx(shape === "notch" ? "button" : "div", {
+                 ref: headerRef,
++                type: shape === "notch" ? "button" : undefined,
++                "aria-expanded": shape === "notch" && hasDesc ? open : undefined,
++                "aria-controls": shape === "notch" && hasDesc ? `sileo-content-${id}` : undefined,
++                onClick: shape === "notch" ? (event) => {
++                    if (!hasDesc) return;
++                    if (open) handleLeave(event); else handleEnter(event);
++                } : undefined,
+                 "data-sileo-header": true,
+                 "data-edge": expand,
+                 children: /*#__PURE__*/ jsxRuntime.jsxs("div", {
+@@ -667,8 +736,9 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+                                     "data-sileo-title": true,
+                                     "data-state": headerLayer.current.view.state,
+                                     className: (_headerLayer_current_view_styles1 = headerLayer.current.view.styles) == null ? void 0 : _headerLayer_current_view_styles1.title,
+-                                    children: headerLayer.current.view.title
+-                                })
++                                    children: shape === "notch" ? headerLayer.current.view.header ?? headerLayer.current.view.title : headerLayer.current.view.title
++                                }),
++                                shape === "notch" && hasDesc && expandIcon
+                             ]
+                         }, headerLayer.current.key),
+                         headerLayer.prev && /*#__PURE__*/ jsxRuntime.jsxs("div", {
+@@ -686,7 +756,7 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+                                     "data-sileo-title": true,
+                                     "data-state": headerLayer.prev.view.state,
+                                     className: (_headerLayer_prev_view_styles1 = headerLayer.prev.view.styles) == null ? void 0 : _headerLayer_prev_view_styles1.title,
+-                                    children: headerLayer.prev.view.title
++                                    children: shape === "notch" ? headerLayer.prev.view.header ?? headerLayer.prev.view.title : headerLayer.prev.view.title
+                                 })
+                             ]
+                         }, headerLayer.prev.key)
+@@ -695,6 +765,8 @@ const GooeyDefs = /*#__PURE__*/ react.memo(function GooeyDefs({ filterId, blur,
+             }),
+             hasDesc && /*#__PURE__*/ jsxRuntime.jsx("div", {
+                 "data-sileo-content": true,
++                id: `sileo-content-${id}`,
++                "aria-hidden": !open,
+                 "data-edge": expand,
+                 "data-visible": open,
+                 children: /*#__PURE__*/ jsxRuntime.jsxs("div", {
+@@ -877,11 +949,12 @@ function useResolvedTheme(theme) {
+     ]);
+     return resolved;
+ }
+-function Toaster({ children, position = "top-right", offset, options, theme }) {
++function Toaster({ children, position = "top-right", offset, options, theme, shape, expandIcon }) {
+     const resolvedTheme = useResolvedTheme(theme);
+     const [toasts, setToasts] = react.useState(store.toasts);
+     const [activeId, setActiveId] = react.useState();
+     const hoverRef = react.useRef(false);
++    const hoveredIdRef = react.useRef(undefined);
+     const timersRef = react.useRef(new Map());
+     const listRef = react.useRef(toasts);
+     const latestRef = react.useRef(undefined);
+@@ -934,6 +1007,12 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+     ]);
+     react.useEffect(()=>{
+         listRef.current = toasts;
++        // Dismissing a hovered/focused toast may remove its node without a
++        // pointer-leave event. Release its pause before scheduling other items.
++        if (hoverRef.current && !toasts.some((item) => item.id === hoveredIdRef.current && !item.exiting)) {
++            hoverRef.current = false;
++            hoveredIdRef.current = undefined;
++        }
+         const toastKeys = new Set(toasts.map(timeoutKey));
+         const toastIds = new Set(toasts.map((t)=>t.id));
+         for (const [key, timer] of timersRef.current){
+@@ -985,10 +1064,12 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+         if (cached) return cached;
+         cached = {
+             enter: (e)=>{
++                hoveredIdRef.current = toastId;
+                 setActiveId((prev)=>prev === toastId ? prev : toastId);
+                 handleMouseEnterRef.current == null ? void 0 : handleMouseEnterRef.current.call(handleMouseEnterRef, e);
+             },
+             leave: (e)=>{
++                if (hoveredIdRef.current === toastId) hoveredIdRef.current = undefined;
+                 setActiveId((prev)=>prev === latestRef.current ? prev : latestRef.current);
+                 handleMouseLeaveRef.current == null ? void 0 : handleMouseLeaveRef.current.call(handleMouseLeaveRef, e);
+             },
+@@ -1042,6 +1123,7 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+                 const expand = expandDir(pos);
+                 return /*#__PURE__*/ jsxRuntime.jsx("section", {
+                     "data-sileo-viewport": true,
++                "data-sileo-shape": shape,
+                     "data-position": pos,
+                     "data-theme": theme ? resolvedTheme : undefined,
+                     "aria-live": "polite",
+@@ -1053,6 +1135,7 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+                             id: item.id,
+                             state: item.state,
+                             title: item.title,
++                            header: item.header,
+                             description: item.description,
+                             position: pill,
+                             expand: expand,
+@@ -1061,6 +1144,8 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+                             styles: item.styles,
+                             button: item.button,
+                             roundness: item.roundness,
++                            shape: shape,
++                            expandIcon: expandIcon,
+                             exiting: item.exiting,
+                             autoExpandDelayMs: item.autoExpandDelayMs,
+                             autoCollapseDelayMs: item.autoCollapseDelayMs,
+diff --git a/dist/index.mjs b/dist/index.mjs
+index f687f84725d587b4c539fccb2f86568a9c18294d..dc1802277d329d5848b8ade7d838efec60b3e86e 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1,4 +1,5 @@
+ 'use client';
++import { notchPath } from './notch.mjs';
+ function __insertCSS(code) {
+   if (!code || typeof document == 'undefined') return
+   let head = document.head || document.getElementsByTagName('head')[0]
+@@ -187,12 +188,20 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+         })
+     });
+ });
+-/* ------------------------------- Component -------------------------------- */ const Sileo = /*#__PURE__*/ memo(function Sileo({ id, fill = "#FFFFFF", state = "success", title = state, description, position = "left", expand = "bottom", className, icon, styles, button, roundness, exiting = false, autoExpandDelayMs, autoCollapseDelayMs, canExpand, interruptKey, refreshKey, onMouseEnter, onMouseLeave, onDismiss }) {
++// Measure each child's natural content, including text hidden by ellipsis.
++const getNotchContentWidth = (element) => {
++    const children = Array.from(element.children);
++    const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
++    return Math.ceil(children.reduce((width, child) => width + Math.max(child.scrollWidth, child.offsetWidth ?? Math.round(child.getBoundingClientRect().width)), 0)
++        + gap * Math.max(0, children.length - 1));
++};
++/* ------------------------------- Component -------------------------------- */ const Sileo = /*#__PURE__*/ memo(function Sileo({ id, fill = "#FFFFFF", state = "success", title = state, description, position = "left", expand = "bottom", className, icon, header, styles, button, roundness, shape, expandIcon, exiting = false, autoExpandDelayMs, autoCollapseDelayMs, canExpand, interruptKey, refreshKey, onMouseEnter, onMouseLeave, onDismiss }) {
+     var _headerLayer_current_view_icon, _headerLayer_prev_view_icon;
+     var _headerLayer_current_view_styles, _headerLayer_current_view_styles1, _headerLayer_prev_view_styles, _headerLayer_prev_view_styles1, _view_styles, _view_styles1;
+     const next = useMemo(()=>({
+             title,
+             description,
++            header,
+             state,
+             icon,
+             styles,
+@@ -201,6 +210,7 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+         }), [
+         title,
+         description,
++        header,
+         state,
+         icon,
+         styles,
+@@ -212,12 +222,13 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+     const [isExpanded, setIsExpanded] = useState(false);
+     const [ready, setReady] = useState(false);
+     const [pillWidth, setPillWidth] = useState(0);
++    const [WIDTH, setNotchWidth] = useState(350);
+     const [contentHeight, setContentHeight] = useState(0);
+     const hasDesc = Boolean(view.description) || Boolean(view.button);
+     const isLoading = view.state === "loading";
+-    const open = hasDesc && isExpanded && !isLoading;
+-    const allowExpand = isLoading ? false : canExpand != null ? canExpand : !interruptKey || interruptKey === id;
+-    const headerKey = `${view.state}-${view.title}`;
++    const open = hasDesc && isExpanded && (!isLoading || shape === "notch");
++    const allowExpand = isLoading && shape !== "notch" ? false : canExpand != null ? canExpand : !interruptKey || interruptKey === id;
++    const headerKey = header != null && shape === "notch" ? `${view.state}-custom-header` : `${view.state}-${view.title}`;
+     const filterId = `sileo-gooey-${id}`;
+     const resolvedRoundness = Math.max(0, roundness != null ? roundness : DEFAULT_ROUNDNESS);
+     const blur = resolvedRoundness * BLUR_RATIO;
+@@ -252,7 +263,7 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+         }
+         const px = headerPadRef.current;
+         const measure = ()=>{
+-            const w = el.scrollWidth + px + PILL_PADDING;
++            const w = (shape === "notch" ? getNotchContentWidth(el) : el.scrollWidth) + px + PILL_PADDING;
+             if (w > PILL_PADDING) {
+                 setPillWidth((prev)=>prev === w ? prev : w);
+             }
+@@ -266,7 +277,7 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+                     const inner = innerRef.current;
+                     const pad = (_headerPadRef_current = headerPadRef.current) != null ? _headerPadRef_current : 0;
+                     if (!inner) return;
+-                    const w = inner.scrollWidth + pad + PILL_PADDING;
++                    const w = (shape === "notch" ? getNotchContentWidth(inner) : inner.scrollWidth) + pad + PILL_PADDING;
+                     if (w > PILL_PADDING) {
+                         setPillWidth((prev)=>prev === w ? prev : w);
+                     }
+@@ -281,7 +292,11 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+             pillObservedRef.current = el;
+         }
+     }, [
+-        headerLayer.current.key
++        headerLayer.current.key,
++        headerLayer.current.view.header,
++        shape,
++        expandIcon,
++        hasDesc
+     ]);
+     useEffect(()=>{
+         return ()=>{
+@@ -383,7 +398,12 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+             clearTimeout(swapTimerRef.current);
+             swapTimerRef.current = null;
+         }
+-        if (open) {
++        if (shape === "notch") {
++            // Keep a hovered/focused promise open while its state changes.
++            pendingRef.current = null;
++            setView(next);
++            setApplied(refreshKey);
++        } else if (open) {
+             pendingRef.current = {
+                 key: refreshKey,
+                 payload: next
+@@ -448,7 +468,7 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+     const expanded = open ? rawExpanded : frozenExpandedRef.current;
+     const svgHeight = hasDesc ? Math.max(expanded, minExpanded) : HEIGHT;
+     const expandedContent = Math.max(0, expanded - HEIGHT);
+-    const resolvedPillWidth = Math.max(pillWidth || HEIGHT, HEIGHT);
++    const resolvedPillWidth = shape === "notch" ? Math.min(WIDTH, Math.max(pillWidth, 176)) : Math.max(pillWidth || HEIGHT, HEIGHT);
+     const pillHeight = HEIGHT + blur * 3;
+     const pillX = position === "right" ? WIDTH - resolvedPillWidth : position === "center" ? (WIDTH - resolvedPillWidth) / 2 : 0;
+     /* ------------------------------- Memoised animate targets ----------------- */ const pillAnimate = useMemo(()=>({
+@@ -478,6 +498,16 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+         }, [
+         ready
+     ]);
++    const [reduceMotion, setReduceMotion] = useState(false);
++    useEffect(() => {
++        if (shape !== "notch") return;
++        const query = window.matchMedia("(prefers-reduced-motion: reduce)");
++        const update = () => setReduceMotion(query.matches);
++        update();
++        query.addEventListener("change", update);
++        return () => query.removeEventListener("change", update);
++    }, [shape]);
++    const notchAnimate = { d: notchPath(open ? 0 : pillX, open ? WIDTH : resolvedPillWidth, open ? expanded : HEIGHT, roundness == null ? 22 : resolvedRoundness) };
+     const viewBox = `0 0 ${WIDTH} ${svgHeight}`;
+     /* ------------------------------- Inline styles ---------------------------- */ const rootStyle = useMemo(()=>({
+             "--_h": `${open ? expanded : HEIGHT}px`,
+@@ -523,6 +553,15 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+     /* -------------------------------- Swipe ----------------------------------- */ const SWIPE_DISMISS = 30;
+     const SWIPE_MAX = 20;
+     const buttonRef = useRef(null);
++    useLayoutEffect(() => {
++        if (shape !== "notch" || !buttonRef.current) return;
++        const el = buttonRef.current;
++        const measure = () => setNotchWidth(el.clientWidth || 350);
++        measure();
++        const observer = new ResizeObserver(measure);
++        observer.observe(el);
++        return () => observer.disconnect();
++    }, [shape]);
+     const pointerStartRef = useRef(null);
+     const onDismissRef = useRef(onDismiss);
+     onDismissRef.current = onDismiss;
+@@ -580,8 +619,10 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+         exiting,
+         onDismiss
+     ]);
+-    /* --------------------------------- Render --------------------------------- */ return /*#__PURE__*/ jsxs("button", {
++    /* --------------------------------- Render --------------------------------- */ return /*#__PURE__*/ jsxs(shape === "notch" ? "div" : "button", {
+         ref: buttonRef,
++        role: shape === "notch" ? "group" : undefined,
++        "data-sileo-shape": shape,
+         type: "button",
+         "data-sileo-toast": true,
+         "data-ready": ready,
+@@ -592,10 +633,25 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+         "data-state": view.state,
+         className: className,
+         style: rootStyle,
+-        onMouseEnter: handleEnter,
+-        onMouseLeave: handleLeave,
++        onMouseEnter: shape === "notch" ? undefined : handleEnter,
++        onMouseLeave: shape === "notch" ? undefined : handleLeave,
++        onPointerEnter: shape === "notch" ? (event) => {
++            if (event.pointerType !== "touch") handleEnter(event);
++        } : undefined,
++        onPointerLeave: shape === "notch" ? (event) => {
++            if (event.pointerType !== "touch") handleLeave(event);
++        } : undefined,
+         onTransitionEnd: handleTransitionEnd,
+-        onPointerDown: handlePointerDown,
++        onPointerDown: shape === "notch" ? undefined : handlePointerDown,
++        onFocus: shape === "notch" ? (event) => {
++            if (event.target.matches(":focus-visible")) handleEnter(event);
++        } : undefined,
++        onBlur: shape === "notch" ? (event) => {
++            if (!event.currentTarget.contains(event.relatedTarget)) handleLeave(event);
++        } : undefined,
++        onKeyDown: shape === "notch" ? (event) => {
++            if (event.key === "Escape") onDismiss?.();
++        } : undefined,
+         children: [
+             /*#__PURE__*/ jsx("div", {
+                 "data-sileo-canvas": true,
+@@ -609,13 +665,19 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+                         /*#__PURE__*/ jsx("title", {
+                             children: "sileo notification"
+                         }),
+-                        /*#__PURE__*/ jsx(GooeyDefs, {
++                        /*#__PURE__*/ shape !== "notch" && jsx(GooeyDefs, {
+                             filterId: filterId,
+                             blur: blur,
+                             width: WIDTH,
+                             height: svgHeight
+                         }),
+-                        /*#__PURE__*/ jsxs("g", {
++                        /*#__PURE__*/ shape === "notch" ? jsx(motion.path, {
++                            "data-sileo-notch": true,
++                            fill: view.fill,
++                            initial: false,
++                            animate: notchAnimate,
++                            transition: reduceMotion ? { duration: 0 } : pillTransition
++                        }) : jsxs("g", {
+                             filter: `url(#${filterId})`,
+                             children: [
+                                 /*#__PURE__*/ jsx(motion.rect, {
+@@ -643,8 +705,15 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+                     ]
+                 })
+             }),
+-            /*#__PURE__*/ jsx("div", {
++            /*#__PURE__*/ jsx(shape === "notch" ? "button" : "div", {
+                 ref: headerRef,
++                type: shape === "notch" ? "button" : undefined,
++                "aria-expanded": shape === "notch" && hasDesc ? open : undefined,
++                "aria-controls": shape === "notch" && hasDesc ? `sileo-content-${id}` : undefined,
++                onClick: shape === "notch" ? (event) => {
++                    if (!hasDesc) return;
++                    if (open) handleLeave(event); else handleEnter(event);
++                } : undefined,
+                 "data-sileo-header": true,
+                 "data-edge": expand,
+                 children: /*#__PURE__*/ jsxs("div", {
+@@ -665,8 +734,9 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+                                     "data-sileo-title": true,
+                                     "data-state": headerLayer.current.view.state,
+                                     className: (_headerLayer_current_view_styles1 = headerLayer.current.view.styles) == null ? void 0 : _headerLayer_current_view_styles1.title,
+-                                    children: headerLayer.current.view.title
+-                                })
++                                    children: shape === "notch" ? headerLayer.current.view.header ?? headerLayer.current.view.title : headerLayer.current.view.title
++                                }),
++                                shape === "notch" && hasDesc && expandIcon
+                             ]
+                         }, headerLayer.current.key),
+                         headerLayer.prev && /*#__PURE__*/ jsxs("div", {
+@@ -684,7 +754,7 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+                                     "data-sileo-title": true,
+                                     "data-state": headerLayer.prev.view.state,
+                                     className: (_headerLayer_prev_view_styles1 = headerLayer.prev.view.styles) == null ? void 0 : _headerLayer_prev_view_styles1.title,
+-                                    children: headerLayer.prev.view.title
++                                    children: shape === "notch" ? headerLayer.prev.view.header ?? headerLayer.prev.view.title : headerLayer.prev.view.title
+                                 })
+                             ]
+                         }, headerLayer.prev.key)
+@@ -693,6 +763,8 @@ const GooeyDefs = /*#__PURE__*/ memo(function GooeyDefs({ filterId, blur, width,
+             }),
+             hasDesc && /*#__PURE__*/ jsx("div", {
+                 "data-sileo-content": true,
++                id: `sileo-content-${id}`,
++                "aria-hidden": !open,
+                 "data-edge": expand,
+                 "data-visible": open,
+                 children: /*#__PURE__*/ jsxs("div", {
+@@ -875,11 +947,12 @@ function useResolvedTheme(theme) {
+     ]);
+     return resolved;
+ }
+-function Toaster({ children, position = "top-right", offset, options, theme }) {
++function Toaster({ children, position = "top-right", offset, options, theme, shape, expandIcon }) {
+     const resolvedTheme = useResolvedTheme(theme);
+     const [toasts, setToasts] = useState(store.toasts);
+     const [activeId, setActiveId] = useState();
+     const hoverRef = useRef(false);
++    const hoveredIdRef = useRef(undefined);
+     const timersRef = useRef(new Map());
+     const listRef = useRef(toasts);
+     const latestRef = useRef(undefined);
+@@ -932,6 +1005,12 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+     ]);
+     useEffect(()=>{
+         listRef.current = toasts;
++        // Dismissing a hovered/focused toast may remove its node without a
++        // pointer-leave event. Release its pause before scheduling other items.
++        if (hoverRef.current && !toasts.some((item) => item.id === hoveredIdRef.current && !item.exiting)) {
++            hoverRef.current = false;
++            hoveredIdRef.current = undefined;
++        }
+         const toastKeys = new Set(toasts.map(timeoutKey));
+         const toastIds = new Set(toasts.map((t)=>t.id));
+         for (const [key, timer] of timersRef.current){
+@@ -983,10 +1062,12 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+         if (cached) return cached;
+         cached = {
+             enter: (e)=>{
++                hoveredIdRef.current = toastId;
+                 setActiveId((prev)=>prev === toastId ? prev : toastId);
+                 handleMouseEnterRef.current == null ? void 0 : handleMouseEnterRef.current.call(handleMouseEnterRef, e);
+             },
+             leave: (e)=>{
++                if (hoveredIdRef.current === toastId) hoveredIdRef.current = undefined;
+                 setActiveId((prev)=>prev === latestRef.current ? prev : latestRef.current);
+                 handleMouseLeaveRef.current == null ? void 0 : handleMouseLeaveRef.current.call(handleMouseLeaveRef, e);
+             },
+@@ -1040,6 +1121,7 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+                 const expand = expandDir(pos);
+                 return /*#__PURE__*/ jsx("section", {
+                     "data-sileo-viewport": true,
++                "data-sileo-shape": shape,
+                     "data-position": pos,
+                     "data-theme": theme ? resolvedTheme : undefined,
+                     "aria-live": "polite",
+@@ -1051,6 +1133,7 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+                             id: item.id,
+                             state: item.state,
+                             title: item.title,
++                            header: item.header,
+                             description: item.description,
+                             position: pill,
+                             expand: expand,
+@@ -1059,6 +1142,8 @@ function Toaster({ children, position = "top-right", offset, options, theme }) {
+                             styles: item.styles,
+                             button: item.button,
+                             roundness: item.roundness,
++                            shape: shape,
++                            expandIcon: expandIcon,
+                             exiting: item.exiting,
+                             autoExpandDelayMs: item.autoExpandDelayMs,
+                             autoCollapseDelayMs: item.autoCollapseDelayMs,
+diff --git a/dist/notch.js b/dist/notch.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab90ffa2f2e1572b77ec5cc9be58ed69441b1913
+--- /dev/null
++++ b/dist/notch.js
+@@ -0,0 +1,20 @@
++'use strict';
++// Local Sileo notch geometry. Keep the command sequence identical for SVG morphing.
++function notchPath(left, width, height, roundness = 22) {
++    const right = left + width;
++    const shoulder = Math.min(14, height / 3);
++    const radius = Math.min(roundness, height - shoulder, width / 2);
++    const k = 0.5522847498;
++    return [
++        `M ${left - shoulder} 0`,
++        `H ${right + shoulder}`,
++        `C ${right + shoulder * (1 - k)} 0 ${right} ${shoulder * (1 - k)} ${right} ${shoulder}`,
++        `V ${height - radius}`,
++        `C ${right} ${height - radius * (1 - k)} ${right - radius * (1 - k)} ${height} ${right - radius} ${height}`,
++        `H ${left + radius}`,
++        `C ${left + radius * (1 - k)} ${height} ${left} ${height - radius * (1 - k)} ${left} ${height - radius}`,
++        `V ${shoulder}`,
++        `C ${left} ${shoulder * (1 - k)} ${left - shoulder * (1 - k)} 0 ${left - shoulder} 0 Z`
++    ].join(' ');
++}
++exports.notchPath = notchPath;
+diff --git a/dist/notch.mjs b/dist/notch.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7cfe603d7319b843dd76427d97a3a505d7ef6189
+--- /dev/null
++++ b/dist/notch.mjs
+@@ -0,0 +1,19 @@
++// Local Sileo notch geometry. Keep the command sequence identical for SVG morphing.
++function notchPath(left, width, height, roundness = 22) {
++    const right = left + width;
++    const shoulder = Math.min(14, height / 3);
++    const radius = Math.min(roundness, height - shoulder, width / 2);
++    const k = 0.5522847498;
++    return [
++        `M ${left - shoulder} 0`,
++        `H ${right + shoulder}`,
++        `C ${right + shoulder * (1 - k)} 0 ${right} ${shoulder * (1 - k)} ${right} ${shoulder}`,
++        `V ${height - radius}`,
++        `C ${right} ${height - radius * (1 - k)} ${right - radius * (1 - k)} ${height} ${right - radius} ${height}`,
++        `H ${left + radius}`,
++        `C ${left + radius * (1 - k)} ${height} ${left} ${height - radius * (1 - k)} ${left} ${height - radius}`,
++        `V ${shoulder}`,
++        `C ${left} ${shoulder * (1 - k)} ${left - shoulder * (1 - k)} 0 ${left - shoulder} 0 Z`
++    ].join(' ');
++}
++export { notchPath };

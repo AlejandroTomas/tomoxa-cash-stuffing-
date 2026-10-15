@@ -1,0 +1,7 @@
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
+
+# Sileo con forma "notch" (toasts tipo isla). Ver src/core/toast/README.md.
+patchedDependencies:
+  sileo@0.1.6: patches/sileo@0.1.6.patch
