@@ -51,6 +51,27 @@
     radial-gradient(120% 90% at 50% 45%, transparent 55%, var(--vignette) 100%);
 }
 
+/*
+ * Con foto: la foto ya trae luz, bokeh, planta y bowl. Solo se suaviza el
+ * contraste bajo la interfaz y, en tema oscuro, se baja la luz.
+ */
+.withPhoto {
+  background-position: 18% 62%;
+}
+.withPhoto::before {
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 60%, var(--vignette) 100%);
+}
+.withPhoto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+:global(.dark) .withPhoto::after {
+  background: linear-gradient(180deg, rgba(24, 14, 18, 0.72), rgba(24, 14, 18, 0.62));
+}
+
 /* Bokeh: luces cálidas fuera de foco. */
 .bokeh {
   position: absolute;

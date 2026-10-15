@@ -9,3 +9,5 @@ mueve a `../context/`).
 
 - [tokens-de-color.md](./tokens-de-color.md) — pasar a tokens los colores fijos
   que quedan en componentes heredados.
+- [sobre-documentos-y-busqueda.md](./sobre-documentos-y-busqueda.md) — abrir un
+  sobre, ver sus documentos y filtrarlos con escritura a mano.

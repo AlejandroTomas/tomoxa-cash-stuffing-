@@ -16,7 +16,7 @@ export const BINDER = {
   /** Ángulo final de la tapa abierta (un poco menos de 180° para que se vea su interior). */
   openAngle: -Math.PI + 0.06,
   /** Pose de la carpeta sobre la mesa: inclinada hacia atrás y girada en 3/4. */
-  tilt: { x: -0.66, y: -0.16, z: 0.07 },
+  tilt: { x: -0.66, y: -0.3, z: 0.07 },
 } as const;
 
 export const RINGS = {

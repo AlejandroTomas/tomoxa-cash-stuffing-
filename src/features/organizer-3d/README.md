@@ -48,14 +48,11 @@ scene/                         Three.js directo, sin React
 
 ## Fondo fotográfico
 
-La referencia tiene de fondo una foto de una habitación cálida desenfocada (planta,
-bowl, luces). No hay una imagen así con derechos de uso en el repo, así que el fondo se
-arma con CSS (`OrganizerBackdrop.module.css`). Para usar una foto:
-
-1. Guardarla en `public/assets/organizer/backdrop.webp` (≥ 2400×1350, < 400 KB, sin
-   objetos en el tercio central-izquierdo donde va la carpeta).
-2. En `OrganizerBackdrop.tsx`: `const BACKDROP_PHOTO = "/assets/organizer/backdrop.webp";`
-3. Para el tema oscuro, una variante `backdrop-dark.webp` (o bajar su brillo con CSS).
+`public/assets/organizer/backdrop.jpg` (1672×941, JPEG 82 %, ~140 KB): habitación cálida
+desenfocada generada para el proyecto. Se activa en `OrganizerBackdrop.tsx`
+(`BACKDROP_PHOTO`); en tema oscuro un velo la oscurece. Con `null` vuelve el fondo
+hecho solo con CSS (degradados, bokeh, planta y bowl). Para cambiarla: misma ruta,
+≥ 1600 px de ancho, con la mitad izquierda despejada (ahí va la carpeta).
 
 ## Assets
 

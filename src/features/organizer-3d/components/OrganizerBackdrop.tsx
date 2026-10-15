@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
+import { cn } from "@/lib/utils";
 import styles from "./OrganizerBackdrop.module.css";
 
 /**
- * Foto opcional para el fondo (habitación desenfocada). Mientras no exista, el
- * fondo se arma solo con CSS. Ver README del feature: "Fondo fotográfico".
+ * Foto del fondo (habitación desenfocada, generada para el proyecto). Con
+ * `null` el fondo se arma solo con CSS. Ver README del feature: "Fondo fotográfico".
  */
-const BACKDROP_PHOTO: string | null = null;
+const BACKDROP_PHOTO: string | null = "/assets/organizer/backdrop.jpg";
 
 const BOKEH = [
   { left: "58%", top: "6%", size: 120 },
@@ -22,7 +23,7 @@ const BOKEH = [
 export function OrganizerBackdrop() {
   const style = BACKDROP_PHOTO ? ({ "--backdrop-photo": `url(${BACKDROP_PHOTO})` } as CSSProperties) : undefined;
   return (
-    <div aria-hidden="true" className={styles.backdrop} style={style}>
+    <div aria-hidden="true" className={cn(styles.backdrop, BACKDROP_PHOTO && styles.withPhoto)} style={style}>
       {!BACKDROP_PHOTO && (
         <>
           <div className={styles.plant} />

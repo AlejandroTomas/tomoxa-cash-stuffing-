@@ -44,7 +44,7 @@ export function frameFor(stage: FramingStage, aspect: number): FrameBox {
   }
   if (aspect >= WIDE_ASPECT) {
     // Protagonistas los sobres: la tapa abierta entra a medias por la izquierda (como la referencia).
-    const left = -W / 2 - W * 0.5;
+    const left = -W / 2 - W * 0.92;
     const right = W / 2 + 1.1;
     return { cx: (left + right) / 2, cy: -0.2, width: right - left, height: VISIBLE_H };
   }
