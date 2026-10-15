@@ -3,13 +3,21 @@ import { gsap } from "gsap";
 import { envelopesMock, type EnvelopeId } from "../mocks/envelopes.mock";
 import { createBinder } from "./binder";
 import { createEnvelope, createEnvelopeGeometries, type EnvelopePart } from "./envelope";
-import { fovFor, presentDepth, rigFor, type CameraRig } from "./framing";
-import { BINDER, ENVELOPE, focusPose, slotPose } from "./layout";
+import { fovFor, presentDepth, rigFor, subFov, type CameraRig, type Viewport } from "./framing";
+import { BINDER, ENVELOPE, focusPose, slotPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 
 /** Lo que el usuario tocó en el lienzo; React decide qué acción corresponde. */
 export type SceneIntent = { type: "binder" } | { type: "envelope"; id: EnvelopeId };
+
+/** Márgenes (px) del lienzo que tapa la interfaz: la carpeta se encuadra en el resto. */
+export interface SafeArea {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
 
 export interface OrganizerSceneApi {
   open: () => Promise<void>;
@@ -19,6 +27,7 @@ export interface OrganizerSceneApi {
   returnEnvelope: (id: EnvelopeId) => Promise<void>;
   /** Regresa el sobre enfocado a su bolsillo (carpeta abierta, sin selección). */
   clearFocus: () => Promise<void>;
+  setSafeArea: (area: SafeArea) => void;
   onIntent: (callback: ((intent: SceneIntent) => void) | null) => void;
   dispose: () => void;
 }
@@ -26,14 +35,13 @@ export interface OrganizerSceneApi {
 type SceneStage = "closed" | "open" | "focused" | "extracted";
 
 /** Dirección desde la que mira la cámara: casi de frente, un poco desde arriba. */
-const VIEW_DIR = new THREE.Vector3(0, 0.1, 1).normalize();
+const VIEW_DIR = new THREE.Vector3(0, 0.08, 1).normalize();
 const STRAP_OPEN = Math.PI / 2 + 0.14;
 const STRAP_TAB_OPEN = Math.PI / 2 - 0.08;
-const FOCUS_TILT = 0;
 /** Cuánto sube el sobre para salir del bolsillo antes de venir al frente. */
-const LIFT = 1.25;
-/** Pose de presentación del sobre extraído (coordenadas de la carpeta inclinada). */
-const EXTRACTED = { rx: -BINDER.tiltX * 0.85, ry: -0.08, rz: -0.03, scale: 1.08 };
+const LIFT = 1.2;
+/** Pose de presentación del sobre extraído: compensa la inclinación de la carpeta para mirar a cámara. */
+const EXTRACTED = { rx: -BINDER.tilt.x * 0.88, ry: -BINDER.tilt.y * 0.7 - 0.06, rz: -BINDER.tilt.z * 0.8, scale: 1.06 };
 /** Distancia (px) por debajo de la cual un pointerup cuenta como toque y no como scroll. */
 const TAP_SLOP = 10;
 
@@ -42,10 +50,10 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const kit = createMaterialKit(maxAnisotropy);
 
-  // root: flotación y paralaje · tilt: la carpeta "sobre la mesa".
+  // root: flotación y paralaje · tilt: la carpeta "sobre la mesa", en 3/4.
   const root = new THREE.Group();
   const tilt = new THREE.Group();
-  tilt.rotation.x = BINDER.tiltX;
+  tilt.rotation.set(BINDER.tilt.x, BINDER.tilt.y, BINDER.tilt.z, "YXZ");
   root.add(tilt);
   scene.add(root);
 
@@ -65,11 +73,29 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   let activeId: EnvelopeId | null = null;
   let disposed = false;
   let visible = true;
-  let aspect = 1;
   let intentListener: ((intent: SceneIntent) => void) | null = null;
 
-  // ── Cámara ────────────────────────────────────────────────────────────────
-  const rig: CameraRig = rigFor("closed", aspect);
+  // ── Cámara y zona libre ───────────────────────────────────────────────────
+  const canvasSize = { width: 1, height: 1 };
+  let safe: SafeArea = { top: 0, right: 0, bottom: 0, left: 0 };
+  function freeRect() {
+    const { width, height } = canvasSize;
+    return { width: Math.max(1, width - safe.left - safe.right), height: Math.max(1, height - safe.top - safe.bottom) };
+  }
+  function viewport(): Viewport {
+    const free = freeRect();
+    return { aspect: free.width / free.height, fov: subFov(fovFor(canvasSize.width / canvasSize.height), free.height / canvasSize.height) };
+  }
+  function applyProjection() {
+    const { width, height } = canvasSize;
+    const free = freeRect();
+    camera.aspect = width / height;
+    camera.fov = fovFor(width / height);
+    // Desplaza el centro óptico al centro de la zona libre.
+    camera.setViewOffset(width, height, width / 2 - (safe.left + free.width / 2), height / 2 - (safe.top + free.height / 2), width, height);
+    camera.updateProjectionMatrix();
+  }
+  const rig: CameraRig = rigFor("closed", viewport());
   const framing = () => (stage === "closed" ? "closed" : "open");
   function applyCamera() {
     camera.position.set(rig.tx + VIEW_DIR.x * rig.distance, rig.ty + VIEW_DIR.y * rig.distance, VIEW_DIR.z * rig.distance);
@@ -105,27 +131,34 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     });
   }
 
-  function restingLayers(except?: EnvelopePart) {
-    parts.forEach((part) => part !== except && part.setLayer(10 + part.index * 5));
+  function restingLayers() {
+    parts.forEach((part) => part.setLayer(10 + part.index * 5));
+  }
+
+  function toPose(tl: gsap.core.Timeline, part: EnvelopePart, pose: SlotPose, at: number, duration: number, ease = "power3.out") {
+    tl.to(part.group.position, { x: pose.x, y: pose.y, z: pose.z, duration, ease }, at);
+    tl.to(part.group.rotation, { x: pose.rx, y: 0, z: 0, duration, ease }, at);
+    tl.to(part.group.scale, { x: 1, y: 1, z: 1, duration, ease }, at);
   }
 
   /** Lleva un sobre a su bolsillo (o un poco abajo si `yieldBy` > 0, para "ceder" espacio). */
-  function toSlot(tl: gsap.core.Timeline, part: EnvelopePart, at: number, duration: number, yieldBy = 0) {
-    const slot = slotPose(part.index);
-    tl.to(part.group.position, { x: slot.x, y: slot.y - yieldBy, z: slot.z, duration, ease: "power3.out" }, at);
-    tl.to(part.group.rotation, { x: 0, y: 0, z: 0, duration, ease: "power3.out" }, at);
-    tl.to(part.group.scale, { x: 1, y: 1, z: 1, duration, ease: "power3.out" }, at);
+  function toSlot(tl: gsap.core.Timeline, part: EnvelopePart, at: number, duration: number, fanned: boolean, yieldBy = 0, ease?: string) {
+    const slot = slotPose(part.index, fanned);
+    toPose(tl, part, { ...slot, y: slot.y - yieldBy }, at, duration, ease);
+  }
+
+  /** Arriba de su bolsillo, en su mismo plano. */
+  function abovePocket(index: number): SlotPose {
+    const slot = slotPose(index, true);
+    return { ...slot, y: slot.y + LIFT * Math.cos(slot.rx), z: slot.z + LIFT * Math.sin(slot.rx) + 0.05 };
   }
 
   /** Camino de regreso: sube sobre su bolsillo, se endereza y entra deslizando. Devuelve cuándo termina. */
-  function slideBack(tl: gsap.core.Timeline, part: EnvelopePart, at: number, endY: number): number {
-    const slot = slotPose(part.index);
+  function slideBack(tl: gsap.core.Timeline, part: EnvelopePart, at: number, end: SlotPose): number {
     const travel = d(0.6);
-    tl.to(part.group.rotation, { x: 0, y: 0, z: 0, duration: travel, ease: "power2.inOut" }, at);
-    tl.to(part.group.scale, { x: 1, y: 1, z: 1, duration: travel, ease: "power2.inOut" }, at);
-    tl.to(part.group.position, { x: slot.x, y: slot.y + LIFT, z: slot.z + 0.05, duration: travel, ease: "power2.inOut" }, at);
+    toPose(tl, part, abovePocket(part.index), at, travel, "power2.inOut");
     tl.call(() => restingLayers(), [], at + travel);
-    tl.to(part.group.position, { y: endY, z: slot.z, duration: d(0.45), ease: "power2.out" }, at + travel);
+    tl.to(part.group.position, { y: end.y, z: end.z, duration: d(0.45), ease: "power2.out" }, at + travel);
     return at + travel + d(0.45);
   }
 
@@ -140,12 +173,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       tl.to(binder.coverPivot.rotation, { y: -0.12, duration: d(0.22), ease: "power1.out" }, d(0.3));
       tl.to(binder.coverPivot.rotation, { y: BINDER.openAngle, duration: d(1.25), ease: "power3.inOut" }, d(0.52));
       tl.to(binder.coverShadow, { opacity: coverShadowOpacity, duration: d(0.8), ease: "power1.out" }, d(1.05));
-      tl.to(rig, { ...rigFor("open", aspect), duration: d(1.45), ease: "power2.inOut" }, d(0.3));
-      // Al liberar la presión de la tapa, los sobres se acomodan en cascada.
-      parts.forEach((part) => {
-        const slot = slotPose(part.index);
-        tl.to(part.group.position, { y: slot.y + 0.07, duration: d(0.2), ease: "power1.out", yoyo: true, repeat: reducedMotion ? 0 : 1 }, d(1.1) + part.index * d(0.045));
-      });
+      tl.to(rig, { ...rigFor("open", viewport()), duration: d(1.5), ease: "power2.inOut" }, d(0.3));
+      // Libres de la tapa, los sobres se levantan en abanico, en cascada.
+      parts.forEach((part) => toSlot(tl, part, d(1.0) + part.index * d(0.06), d(0.7), true, 0, "back.out(1.5)"));
     });
   }
 
@@ -156,15 +186,17 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     activeId = null;
     clearHover();
     await play((tl) => {
-      const start = extracted ? slideBack(tl, extracted, 0, slotPose(extracted.index).y) : 0;
-      parts.forEach((part) => part !== extracted && toSlot(tl, part, 0, d(0.5)));
+      const start = extracted ? slideBack(tl, extracted, 0, slotPose(extracted.index, true)) : 0;
       tl.call(() => restingLayers(), [], start);
-      tl.to(binder.coverPivot.rotation, { y: 0, duration: d(1.15), ease: "power3.inOut" }, start + d(0.15));
-      tl.to(binder.coverShadow, { opacity: 0, duration: d(0.6) }, start + d(0.2));
-      tl.to(rig, { ...rigFor("closed", aspect), duration: d(1.3), ease: "power2.inOut" }, start + d(0.1));
+      // Los sobres se acuestan antes de que baje la tapa.
+      parts.forEach((part) => toSlot(tl, part, start + (parts.length - 1 - part.index) * d(0.04), d(0.5), false, 0, "power2.inOut"));
+      const cover = start + d(0.35);
+      tl.to(binder.coverPivot.rotation, { y: 0, duration: d(1.15), ease: "power3.inOut" }, cover);
+      tl.to(binder.coverShadow, { opacity: 0, duration: d(0.6) }, cover + d(0.05));
+      tl.to(rig, { ...rigFor("closed", viewport()), duration: d(1.3), ease: "power2.inOut" }, cover);
       // Abrocha: la correa sube por el canto y la lengüeta se dobla sobre la tapa.
-      tl.to(binder.strapPivot.rotation, { y: 0, duration: d(0.5), ease: "power2.inOut" }, start + d(1.15));
-      tl.to(binder.strapTab.rotation, { y: 0, duration: d(0.38), ease: "back.out(1.4)" }, start + d(1.52));
+      tl.to(binder.strapPivot.rotation, { y: 0, duration: d(0.5), ease: "power2.inOut" }, cover + d(1.0));
+      tl.to(binder.strapTab.rotation, { y: 0, duration: d(0.38), ease: "back.out(1.4)" }, cover + d(1.37));
     });
   }
 
@@ -176,11 +208,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     restingLayers();
     await play((tl) => {
       // Los sobres de enfrente ceden un poco; el elegido asoma de su bolsillo.
-      parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.5), other.index > part.index ? 0.08 : 0));
-      const pose = focusPose(part.index);
-      tl.to(part.group.position, { ...pose, duration: d(0.62), ease: "back.out(1.5)" }, d(0.04));
-      tl.to(part.group.rotation, { x: FOCUS_TILT, y: 0, z: -0.012, duration: d(0.62), ease: "power2.out" }, d(0.04));
-      tl.to(part.group.scale, { x: 1, y: 1, z: 1, duration: d(0.4) }, 0);
+      parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.5), true, other.index > part.index ? 0.06 : 0));
+      toPose(tl, part, focusPose(part.index), d(0.04), d(0.62), "back.out(1.5)");
     });
   }
 
@@ -189,11 +218,12 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
    * cerca de la cámara como permite el encuadre sin recortarlo.
    */
   function extractedSpot() {
-    const open = rigFor("open", aspect);
-    const x = 0.2 + open.tx * 0.55;
-    const z = presentDepth(open, aspect, ENVELOPE.width * EXTRACTED.scale, ENVELOPE.height * EXTRACTED.scale + 0.6, x - open.tx);
+    const vp = viewport();
+    const open = rigFor("open", vp);
+    const x = 0.25 + open.tx * 0.5;
+    const z = presentDepth(open, vp, ENVELOPE.width * EXTRACTED.scale + 0.5, ENVELOPE.height * EXTRACTED.scale + 0.7, x - open.tx);
     // La carpeta está inclinada: compensar en Y lo que sube al acercarse en Z.
-    const y = (0.35 + z * Math.sin(BINDER.tiltX)) / Math.cos(BINDER.tiltX);
+    const y = (0.25 + z * Math.sin(BINDER.tilt.x)) / Math.cos(BINDER.tilt.x);
     return { x, y, z };
   }
 
@@ -204,15 +234,13 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     activeId = id;
     clearHover();
     part.setLayer(200);
-    const slot = slotPose(part.index);
     await play((tl) => {
-      parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.45)));
-      // 1) Sale del bolsillo hacia arriba. 2) Viene al frente, perpendicular a la carpeta.
-      tl.to(part.group.position, { x: slot.x, y: slot.y + LIFT, z: slot.z + 0.05, duration: d(0.4), ease: "power2.in" }, 0);
-      tl.to(part.group.rotation, { x: 0, z: 0, duration: d(0.4), ease: "power2.in" }, 0);
-      tl.to(part.group.position, { ...extractedSpot(), duration: d(0.78), ease: "power3.out" }, d(0.4));
+      parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.45), true));
+      // 1) Sale del bolsillo hacia arriba. 2) Viene al frente, mirando a la cámara.
+      toPose(tl, part, abovePocket(part.index), 0, d(0.4), "power2.in");
+      tl.to(part.group.position, { ...extractedSpot(), duration: d(0.8), ease: "power3.out" }, d(0.4));
       tl.to(part.group.rotation, { x: EXTRACTED.rx, y: EXTRACTED.ry, z: EXTRACTED.rz, duration: d(0.85), ease: "power2.out" }, d(0.36));
-      tl.to(part.group.scale, { x: EXTRACTED.scale, y: EXTRACTED.scale, z: EXTRACTED.scale, duration: d(0.78), ease: "power2.out" }, d(0.4));
+      tl.to(part.group.scale, { x: EXTRACTED.scale, y: EXTRACTED.scale, z: EXTRACTED.scale, duration: d(0.8), ease: "power2.out" }, d(0.4));
     });
   }
 
@@ -222,8 +250,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     stage = "focused";
     activeId = id;
     await play((tl) => {
-      const end = slideBack(tl, part, 0, focusPose(part.index).y);
-      tl.to(part.group.rotation, { x: FOCUS_TILT, z: -0.012, duration: d(0.3), ease: "power2.out" }, end - d(0.3));
+      slideBack(tl, part, 0, focusPose(part.index));
     });
   }
 
@@ -232,7 +259,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     stage = "open";
     activeId = null;
     restingLayers();
-    await play((tl) => parts.forEach((part) => toSlot(tl, part, 0, d(0.5))));
+    await play((tl) => parts.forEach((part) => toSlot(tl, part, 0, d(0.5), true)));
   }
 
   // ── Puntero: hover, paralaje y toques ─────────────────────────────────────
@@ -255,7 +282,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     if (next === hovered) return;
     ctx.add(() => {
       if (hovered) gsap.to(hovered.hover.position, { y: 0, duration: d(0.3), ease: "power2.out" });
-      if (next) gsap.to(next.hover.position, { y: 0.07, duration: d(0.3), ease: "power2.out" });
+      if (next) gsap.to(next.hover.position, { y: 0.08, duration: d(0.3), ease: "power2.out" });
     });
     hovered = next;
     shadowsDirtyUntil = performance.now() + 400;
@@ -300,20 +327,22 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   // ── Tamaño y visibilidad ──────────────────────────────────────────────────
   function snapFraming() {
     reframePending = false;
-    Object.assign(rig, rigFor(framing(), aspect));
+    Object.assign(rig, rigFor(framing(), viewport()));
+  }
+  function reframe() {
+    applyProjection();
+    if (running) reframePending = true;
+    else snapFraming();
   }
   function resize() {
     if (disposed) return;
     const width = mount.clientWidth;
     const height = mount.clientHeight;
     if (!width || !height) return;
-    aspect = width / height;
-    camera.aspect = aspect;
-    camera.fov = fovFor(aspect);
-    camera.updateProjectionMatrix();
+    canvasSize.width = width;
+    canvasSize.height = height;
     renderer.setSize(width, height, false);
-    if (running) reframePending = true;
-    else snapFraming();
+    reframe();
   }
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(mount);
@@ -333,11 +362,11 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     frame = requestAnimationFrame(loop);
     if (!visible || document.hidden) return;
     if (!reducedMotion) {
-      const tx = pointer.active ? pointer.x * 0.045 : 0;
-      const ty = pointer.active ? pointer.y * 0.03 : 0;
-      root.rotation.y += (tx + Math.sin(now * 0.00035) * 0.012 - root.rotation.y) * 0.06;
+      const tx = pointer.active ? pointer.x * 0.04 : 0;
+      const ty = pointer.active ? pointer.y * 0.025 : 0;
+      root.rotation.y += (tx + Math.sin(now * 0.00035) * 0.01 - root.rotation.y) * 0.06;
       root.rotation.x += (ty - root.rotation.x) * 0.06;
-      root.position.y = Math.sin(now * 0.0006) * 0.025;
+      root.position.y = Math.sin(now * 0.0006) * 0.02;
     }
     applyCamera();
     if (now < shadowsDirtyUntil || tick++ % 8 === 0) renderer.shadowMap.needsUpdate = true;
@@ -352,6 +381,12 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     extract,
     returnEnvelope,
     clearFocus,
+    setSafeArea: (area) => {
+      const same = area.top === safe.top && area.right === safe.right && area.bottom === safe.bottom && area.left === safe.left;
+      if (same || disposed) return;
+      safe = area;
+      reframe();
+    },
     onIntent: (callback) => {
       intentListener = callback;
     },

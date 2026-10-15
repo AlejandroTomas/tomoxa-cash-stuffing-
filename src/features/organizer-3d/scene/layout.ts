@@ -14,50 +14,60 @@ export const BINDER = {
   /** Cara interior de la tapa delantera cuando está cerrada. */
   frontZ: 0.5,
   /** Ángulo final de la tapa abierta (un poco menos de 180° para que se vea su interior). */
-  openAngle: -Math.PI + 0.07,
-  /** Inclinación de toda la carpeta, como si estuviera sobre una mesa. */
-  tiltX: -0.3,
+  openAngle: -Math.PI + 0.06,
+  /** Pose de la carpeta sobre la mesa: inclinada hacia atrás y girada en 3/4. */
+  tilt: { x: -0.66, y: -0.16, z: 0.07 },
 } as const;
 
 export const RINGS = {
-  x: -1.56,
-  z: -0.06,
-  radius: 0.5,
-  tube: 0.034,
-  ys: [-1.75, 0, 1.75],
+  x: -1.62,
+  z: -0.04,
+  radius: 0.52,
+  tube: 0.045,
+  ys: [-2.15, -1.29, -0.43, 0.43, 1.29, 2.15],
 } as const;
 
 export const ENVELOPE = {
   width: 3.6,
-  height: 2.5,
+  height: 2.1,
   /** Separación vertical entre sobres: deja visible el encabezado con la etiqueta. */
-  stagger: 0.52,
-  depthStep: 0.12,
-  topY: 1.42,
-  x: 0.24,
-  firstZ: -0.38,
+  stagger: 0.66,
+  depthStep: 0.1,
+  topY: 1.6,
+  x: 0.26,
+  firstZ: -0.36,
+  /** Con la carpeta abierta los sobres se levantan en abanico, girando sobre su borde inferior. */
+  fan: 0.36,
 } as const;
 
 export interface SlotPose {
   x: number;
   y: number;
   z: number;
-}
-
-/** Lugar de reposo del sobre `index` dentro de la carpeta. */
-export function slotPose(index: number): SlotPose {
-  return {
-    x: ENVELOPE.x + index * 0.012,
-    y: ENVELOPE.topY - index * ENVELOPE.stagger,
-    z: ENVELOPE.firstZ + index * ENVELOPE.depthStep,
-  };
+  /** Rotación en X (abanico). */
+  rx: number;
 }
 
 /**
- * Pose de "enfocado": asoma de su bolsillo hacia arriba sin salir de su plano,
- * para no atravesar los sobres que tiene enfrente.
+ * Lugar de reposo del sobre `index`. Cerrada: planos y apilados.
+ * Abierta: girados `fan` sobre su borde inferior (como un archivador).
  */
-export function focusPose(index: number): SlotPose {
-  const slot = slotPose(index);
-  return { x: slot.x, y: slot.y + 0.62, z: slot.z + 0.015 };
+export function slotPose(index: number, fanned = false): SlotPose {
+  const x = ENVELOPE.x + index * 0.014;
+  const y = ENVELOPE.topY - index * ENVELOPE.stagger;
+  const z = ENVELOPE.firstZ + index * ENVELOPE.depthStep;
+  if (!fanned) return { x, y, z, rx: 0 };
+  const rx = ENVELOPE.fan - index * 0.012;
+  const half = ENVELOPE.height / 2;
+  // Girar sobre el centro y compensar para que el borde inferior quede en su lugar.
+  return { x, y: y - half * (1 - Math.cos(rx)), z: z + half * Math.sin(rx), rx };
+}
+
+/** Distancia que asoma un sobre enfocado, a lo largo de su propio plano. */
+export const FOCUS_LIFT = 0.42;
+
+/** Pose de "enfocado": asoma hacia arriba dentro de su plano, sin atravesar a los de enfrente. */
+export function focusPose(index: number, fanned = true): SlotPose {
+  const slot = slotPose(index, fanned);
+  return { ...slot, y: slot.y + FOCUS_LIFT * Math.cos(slot.rx), z: slot.z + FOCUS_LIFT * Math.sin(slot.rx) + 0.01 };
 }

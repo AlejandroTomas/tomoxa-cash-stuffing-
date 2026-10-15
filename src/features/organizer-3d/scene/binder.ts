@@ -17,6 +17,8 @@ export interface BinderParts {
 }
 
 const { width: W, height: H, panel: P, radius: R, backZ, frontZ } = BINDER;
+/** Altura de la correa con broche (un poco arriba del centro, como en la referencia). */
+const STRAP_Y = 0.55;
 
 function mesh(geometry: THREE.BufferGeometry, material: THREE.Material, parent: THREE.Object3D, position: [number, number, number], shadows = true) {
   const m = new THREE.Mesh(geometry, material);
@@ -56,12 +58,18 @@ export function createBinder(kit: MaterialKit): BinderParts {
   const spineRadius = (frontZ + P - backZ) / 2;
   mesh(spineGeometry(spineRadius, P * 0.95, H - 0.02), kit.leather, group, [-W / 2 + 0.02, 0, (frontZ + P + backZ) / 2]);
 
+  // Hojas de repuesto blancas detrás de los sobres (asoman junto a las anillas).
+  const sheet = roundedSlab(W - 0.7, H - 0.55, 0.012, 0.12, 0.004);
+  const sheetPaper = kit.paper("#fbf8f3");
+  mesh(sheet, sheetPaper, group, [0.12, 0, liningZ + 0.03]).rotation.z = -0.01;
+  mesh(sheet, sheetPaper, group, [0.2, -0.03, liningZ + 0.05]).rotation.z = 0.008;
+
   // ── Mecanismo de anillas ──────────────────────────────────────────────────
   const plateZ = liningZ + 0.05;
-  mesh(roundedSlab(0.3, H - 1.1, 0.06, 0.12, 0.025), kit.metal, group, [RINGS.x, 0, plateZ]);
+  mesh(roundedSlab(0.34, H - 0.7, 0.07, 0.14, 0.03), kit.metal, group, [RINGS.x - 0.02, 0, plateZ]);
   const rivet = new THREE.CylinderGeometry(0.05, 0.05, 0.03, 20).rotateX(Math.PI / 2);
-  for (const y of [-(H - 1.5) / 2, (H - 1.5) / 2]) mesh(rivet, kit.metal, group, [RINGS.x, y, plateZ + 0.045]);
-  const ring = new THREE.TorusGeometry(RINGS.radius, RINGS.tube, 12, 56);
+  for (const y of [-(H - 1.1) / 2, (H - 1.1) / 2]) mesh(rivet, kit.metal, group, [RINGS.x, y, plateZ + 0.045]);
+  const ring = new THREE.TorusGeometry(RINGS.radius, RINGS.tube, 14, 64);
   for (const y of RINGS.ys) {
     const r = mesh(ring, kit.metal, group, [RINGS.x, y, RINGS.z]);
     r.rotation.x = Math.PI / 2; // plano XZ: atraviesa la pila de sobres
@@ -88,7 +96,7 @@ export function createBinder(kit: MaterialKit): BinderParts {
 
   // Botón macho del broche (queda bajo la lengüeta de la correa).
   const stud = new THREE.CylinderGeometry(0.075, 0.09, 0.05, 24).rotateX(Math.PI / 2);
-  mesh(stud, kit.metal, coverPivot, [W - 0.5, 0, P / 2 + 0.02]);
+  mesh(stud, kit.metal, coverPivot, [W - 0.5, STRAP_Y, P / 2 + 0.02]);
 
   // Interior de la tapa (mira a -Z cerrada; a la cámara cuando se abre).
   const innerZ = -P / 2 - 0.012;
@@ -96,25 +104,19 @@ export function createBinder(kit: MaterialKit): BinderParts {
   const innerStitch = stitches(W - 0.5, H - 0.5, R - 0.16, kit.stitch);
   innerStitch.position.set(W / 2, 0, innerZ - 0.013);
   coverPivot.add(innerStitch);
-  // Tarjeteros: bolsillos de cuero escalonados con una tarjeta asomando.
-  const slotGeometry = roundedSlab(W - 0.95, 1.05, 0.03, 0.12, 0.012);
-  const card = mesh(roundedSlab(W - 1.35, 1, 0.012, 0.1, 0.004), kit.paper("#cfe0f5"), coverPivot, [W / 2 + 0.05, 1.82, innerZ - 0.02]);
-  card.rotation.z = 0.025;
-  for (let k = 0; k < 3; k++) {
-    mesh(slotGeometry, kit.leather, coverPivot, [W / 2 + 0.05, 1.45 - k * 0.42, innerZ - 0.035 - k * 0.016]);
-    const lip = stitchLine(W - 1.2, kit.stitch);
-    lip.position.set(W / 2 + 0.05, 1.45 - k * 0.42 + 0.43, innerZ - 0.052 - k * 0.016);
-    coverPivot.add(lip);
+  // Banda elástica vertical junto al lomo (porta pluma), con pespunte a ambos lados.
+  mesh(roundedSlab(0.42, H - 0.7, 0.045, 0.06, 0.018), kit.leatherEdge, coverPivot, [0.62, 0, innerZ - 0.03]);
+  for (const dx of [-0.16, 0.16]) {
+    const seam = stitchLine(H - 0.9, kit.stitch);
+    seam.rotation.z = Math.PI / 2;
+    seam.position.set(0.62 + dx, 0, innerZ - 0.056);
+    coverPivot.add(seam);
   }
-  // Ventana transparente para notas.
-  mesh(roundedSlab(W - 1.35, 1.25, 0.008, 0.08, 0.003), kit.paper("#fbf3e6"), coverPivot, [W / 2 + 0.05, -1.25, innerZ - 0.02]);
-  const notesWindow = mesh(roundedSlab(W - 0.95, 1.6, 0.012, 0.14, 0.004), kit.plastic("#ffffff", { opacity: 0.26, roughness: 0.12, clearcoat: 1 }), coverPivot, [W / 2 + 0.05, -1.22, innerZ - 0.04], false);
-  notesWindow.renderOrder = 1;
 
   // ── Correa con broche ─────────────────────────────────────────────────────
   const strapDepth = frontZ + P - backZ + 0.07;
   const strapPivot = new THREE.Group();
-  strapPivot.position.set(W / 2 - 0.03, 0, backZ);
+  strapPivot.position.set(W / 2 - 0.03, STRAP_Y, backZ);
   group.add(strapPivot);
   mesh(roundedSlab(0.08, 0.96, strapDepth, 0.04, 0.03), kit.leather, strapPivot, [0.05, 0, strapDepth / 2]);
   const strapTab = new THREE.Group();
@@ -124,8 +126,9 @@ export function createBinder(kit: MaterialKit): BinderParts {
   const tabStitch = stitches(0.84, 0.78, 0.33, kit.stitch, 0.1, 0.052);
   tabStitch.position.set(-0.47, 0, 0.038);
   strapTab.add(tabStitch);
-  mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.045, 32).rotateX(Math.PI / 2), kit.metal, strapTab, [-0.62, 0, 0.045]);
-  mesh(new THREE.TorusGeometry(0.1, 0.02, 8, 32), kit.metal, strapTab, [-0.62, 0, 0.07]);
+  // Broche: domo dorado.
+  mesh(new THREE.SphereGeometry(0.17, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2).scale(1, 1, 0.55), kit.metal, strapTab, [-0.62, 0, 0.03]);
+  mesh(new THREE.TorusGeometry(0.17, 0.018, 8, 36), kit.metal, strapTab, [-0.62, 0, 0.035]);
   strapTab.traverse((o) => hitTargets.push(o));
 
   return { group, coverPivot, strapPivot, strapTab, coverShadow, hitTargets };

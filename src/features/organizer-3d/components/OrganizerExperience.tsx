@@ -1,20 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, MousePointerClick, RotateCcw } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useEffect, useRef } from "react";
+import { BookOpen, ChevronRight } from "lucide-react";
 import { getEnvelope } from "../mocks/envelopes.mock";
-import { STAGE_LABELS, type OrganizerView } from "../domain/organizerView";
-import { EnvelopePanel } from "./EnvelopePanel";
+import type { OrganizerView } from "../domain/organizerView";
+import { EnvelopeDetailCard } from "./EnvelopeDetailCard";
+import { EnvelopeTiles } from "./EnvelopeTiles";
+import { OrganizerBackdrop } from "./OrganizerBackdrop";
+import { OrganizerNav } from "./OrganizerNav";
 import { useOrganizerController } from "./useOrganizerController";
 
 const OrganizerCanvas = dynamic(() => import("./OrganizerCanvas"), {
   ssr: false,
-  loading: () => (
-    <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">Preparando tu carpeta…</div>
-  ),
+  loading: () => <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Preparando tu carpeta…</div>,
 });
 
 function announce(view: OrganizerView): string {
@@ -25,82 +24,109 @@ function announce(view: OrganizerView): string {
   return `Sobre ${name} fuera de la carpeta.`;
 }
 
-function hint(view: OrganizerView, touch: boolean): string {
-  const tap = touch ? "Toca" : "Haz clic en";
-  if (view.stage === "closed") return `${tap} la carpeta para abrirla`;
-  if (view.stage === "open") return `${tap} un sobre para sacarlo`;
-  if (view.stage === "focused") return `${tap} el sobre otra vez para extraerlo`;
-  return `${tap} el sobre para regresarlo`;
+function overlaps(outer: DOMRect, inner: DOMRect): boolean {
+  return inner.left < outer.right && inner.right > outer.left && inner.top < outer.bottom && inner.bottom > outer.top;
 }
 
-/** Carpeta organizadora 3D con sobres extraíbles. Solo visual: los importes son mock. */
+/**
+ * Aurora Organizer: carpeta 3D a pantalla completa con la interfaz de vidrio
+ * encima (navegación, detalle del sobre, fila de sobres). Solo visual: los
+ * importes vienen del mock y nada mueve dinero real.
+ */
 export function OrganizerExperience() {
-  const { view, busy, unavailable, perform, selectEnvelope, step, back, canvas } = useOrganizerController();
-  const primary =
-    view.stage === "closed"
-      ? { label: "Abrir carpeta", icon: <ArrowRight />, run: () => perform({ type: "OPEN" }) }
-      : view.stage === "open"
-        ? { label: "Explorar sobres", icon: <ArrowRight />, run: () => step(1) }
-        : view.stage === "focused"
-          ? { label: "Extraer sobre", icon: <ArrowUpRight />, run: () => perform({ type: "EXTRACT" }) }
-          : { label: "Regresar sobre", icon: <ArrowLeft />, run: () => perform({ type: "RETURN" }) };
+  const { view, selectedId, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } = useOrganizerController();
+  const sceneRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const item = getEnvelope(selectedId);
+
+  // La carpeta se encuadra en la parte del lienzo que no tapa la interfaz.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const measure = () => {
+      const s = scene.getBoundingClientRect();
+      const nav = navRef.current?.getBoundingClientRect();
+      const card = cardRef.current?.getBoundingClientRect();
+      const pill = pillRef.current?.getBoundingClientRect();
+      const cardOver = Boolean(card && overlaps(s, card));
+      setSafeArea({
+        top: nav && overlaps(s, nav) ? nav.bottom - s.top + 8 : 8,
+        right: card && cardOver ? s.right - card.left + 16 : 8,
+        // En escritorio la carpeta puede pasar detrás del botón; en móvil no.
+        bottom: pill && !cardOver ? s.bottom - pill.top + 8 : 16,
+        left: 8,
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    [scene, navRef.current, cardRef.current].forEach((el) => el && observer.observe(el));
+    measure();
+    return () => observer.disconnect();
+  }, [setSafeArea]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
-      <Card className="gap-0 self-start overflow-hidden py-0">
-        <section
-          aria-label="Carpeta 3D"
-          aria-describedby="organizer-help"
-          className="relative aspect-[5/6] max-h-[640px] w-full sm:aspect-auto sm:h-[clamp(360px,60vh,640px)] bg-[radial-gradient(ellipse_at_45%_40%,var(--color-accent),transparent_70%)]"
-        >
-          {unavailable ? (
-            <div role="status" className="absolute inset-4 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border p-6 text-center">
-              <BookOpen className="size-8 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground">Tu organizador sigue disponible</p>
-              <p className="max-w-xs text-xs text-muted-foreground">{unavailable} Usa la lista de sobres para explorar.</p>
-            </div>
-          ) : (
-            <OrganizerCanvas {...canvas} />
-          )}
-          <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
-            <Badge variant="secondary" className="gap-1.5">
-              <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
-              {STAGE_LABELS[view.stage]}
-            </Badge>
-            <Badge variant="outline" className="bg-card/70 backdrop-blur-sm">Modo demo</Badge>
-          </div>
-          <p id="organizer-help" className="sr-only">
-            Representación visual de la carpeta. Usa la lista de sobres o el teclado: flechas para cambiar de sobre y Escape para regresar.
-          </p>
-          <p className="sr-only" aria-live="polite">
-            {announce(view)}
-          </p>
-        </section>
-        <div className="flex items-center justify-between gap-3 border-t border-border p-3">
-          <Button variant="ghost" disabled={busy || view.stage === "closed"} onClick={back}>
-            <RotateCcw /> {view.stage === "open" ? "Cerrar carpeta" : "Atrás"}
-          </Button>
-          {!unavailable && (
-            <p className="hidden min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground sm:flex">
-              <MousePointerClick className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate pointer-coarse:hidden">{hint(view, false)}</span>
-              <span className="hidden truncate pointer-coarse:inline">{hint(view, true)}</span>
-            </p>
-          )}
-          <Button disabled={busy} onClick={() => void primary.run()}>
-            {primary.label} {primary.icon}
-          </Button>
-        </div>
-      </Card>
+    <main className="relative isolate min-h-dvh overflow-x-clip lg:h-dvh lg:min-h-[720px] lg:overflow-hidden">
+      <OrganizerBackdrop />
+      <div ref={navRef} className="relative z-20 lg:absolute lg:inset-x-[3%] lg:top-[2.4%]">
+        <OrganizerNav />
+      </div>
 
-      <EnvelopePanel
-        view={view}
-        busy={busy}
-        onSelect={(id) => void selectEnvelope(id)}
-        onStep={step}
-        onExtract={() => void perform({ type: "EXTRACT" })}
-        onReturn={() => void perform({ type: "RETURN" })}
-      />
-    </div>
+      <section
+        ref={sceneRef}
+        aria-label="Carpeta 3D"
+        aria-describedby="organizer-help"
+        className="relative h-[58svh] min-h-[380px] lg:absolute lg:inset-0 lg:h-auto lg:min-h-0"
+      >
+        {unavailable ? (
+          <div role="status" className="absolute inset-x-6 top-1/2 mx-auto flex max-w-sm -translate-y-1/2 flex-col items-center gap-2 rounded-3xl border border-card/70 bg-card/60 p-6 text-center backdrop-blur-xl lg:left-[8%] lg:mx-0">
+            <BookOpen className="size-8 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">Tu organizador sigue disponible</p>
+            <p className="text-xs text-muted-foreground">{unavailable} Usa los sobres de abajo para explorar.</p>
+          </div>
+        ) : (
+          <OrganizerCanvas {...canvas} />
+        )}
+        <button
+          ref={pillRef}
+          type="button"
+          disabled={busy}
+          onClick={() => void toggleBinder()}
+          className="absolute bottom-4 left-4 z-10 flex h-14 items-center gap-4 rounded-full border border-card/70 bg-card/45 pr-5 pl-6 text-[0.95rem] font-medium text-foreground shadow-lg shadow-foreground/5 outline-none backdrop-blur-xl transition-colors hover:bg-card/65 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-70 lg:bottom-[11%] lg:left-[3.7%] lg:h-[5.5rem] lg:gap-6 lg:pr-8 lg:pl-9 lg:text-lg"
+        >
+          <BookOpen className="size-6 lg:size-7" strokeWidth={1.6} aria-hidden="true" />
+          {view.stage === "closed" ? "Abrir carpeta" : "Cerrar carpeta"}
+          <ChevronRight className="size-5" aria-hidden="true" />
+        </button>
+        <p id="organizer-help" className="sr-only">
+          Representación visual de la carpeta. Usa los botones de los sobres o el teclado: flechas para cambiar de sobre y Escape para regresar.
+        </p>
+        <p className="sr-only" aria-live="polite">
+          {announce(view)}
+        </p>
+      </section>
+
+      <div className="relative z-10 flex flex-col gap-4 px-3 pb-6 lg:contents">
+        <EnvelopeTiles
+          selectedId={selectedId}
+          busy={busy}
+          onSelect={(id) => void selectEnvelope(id)}
+          className="lg:absolute lg:right-[1.6%] lg:bottom-[2.6%] lg:z-10 lg:w-[min(51%,1000px)]"
+        />
+        <div ref={cardRef} className="lg:absolute lg:top-[13%] lg:right-[2%] lg:z-10 lg:w-[min(27.5%,540px)] lg:min-w-[380px]">
+          <EnvelopeDetailCard
+            item={item}
+            stage={view.stage}
+            busy={busy}
+            onExtract={() => void extractSelected()}
+            onReturn={() => void perform({ type: "RETURN" })}
+            onShow={() => void selectEnvelope(item.id)}
+            onStep={step}
+            onBack={back}
+            className="lg:max-h-[calc(84dvh-(min(51vw,1000px)-5rem)*0.139-1.5rem)] lg:overflow-y-auto"
+          />
+        </div>
+      </div>
+    </main>
   );
 }

@@ -1,0 +1,155 @@
+"use client";
+
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ArrowLeft, ArrowLeftRight, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast } from "@/core/toast";
+import { cn } from "@/lib/utils";
+import { envelopesMock, type EnvelopeItem } from "../mocks/envelopes.mock";
+import type { Stage } from "../domain/organizerView";
+import { ENVELOPE_ICONS } from "./envelopeIcons";
+
+const amountFormat = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dateFormat = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" });
+
+/** "$ 1,800.00" (con espacio, como en el diseño). */
+export const formatAmount = (amount: number) => `$ ${amountFormat.format(amount)}`;
+
+/** Fecha ISO local (YYYY-MM-DD) → "6 oct 2026". */
+export function formatShortDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  return dateFormat.format(new Date(year, month - 1, day)).replace(/\./g, "");
+}
+
+interface EnvelopeDetailCardProps {
+  item: EnvelopeItem;
+  stage: Stage;
+  busy: boolean;
+  onExtract: () => void;
+  onReturn: () => void;
+  onShow: () => void;
+  onStep: (direction: -1 | 1) => void;
+  onBack: () => void;
+  className?: string;
+}
+
+const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
+
+/** Tarjeta de vidrio con el detalle del sobre seleccionado. Importes de demostración. */
+export function EnvelopeDetailCard({ item, stage, busy, onExtract, onReturn, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+  const reduceMotion = useReducedMotion();
+  const Icon = ENVELOPE_ICONS[item.icon];
+  const index = envelopesMock.findIndex((envelope) => envelope.id === item.id);
+  const extracted = stage === "extracted";
+  const soon = () => toast.info("Disponible en la siguiente fase. Esta es una demostración visual.");
+
+  return (
+    <section aria-label={`Detalle de ${item.name}`} className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, className)}>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={item.id}
+          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+          transition={{ duration: 0.2 }}
+        >
+          <div className="flex items-start gap-4">
+            <span
+              aria-hidden="true"
+              className="grid size-16 shrink-0 place-items-center rounded-2xl text-primary-foreground shadow-lg"
+              style={{ backgroundColor: item.color, boxShadow: `0 10px 24px -8px ${item.color}` }}
+            >
+              <Icon className="size-8" strokeWidth={1.8} />
+            </span>
+            <div className="min-w-0 flex-1 pt-1">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">{item.name}</h2>
+              <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{item.description}</p>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Más opciones" className="-mt-1 -mr-1 shrink-0 rounded-full bg-card/80">
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={busy || extracted} onSelect={onShow}>
+                  Mostrar en la carpeta
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={busy || stage === "closed"} onSelect={onBack}>
+                  {extracted ? "Regresar a la carpeta" : "Atrás"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <p className="mt-5 text-4xl font-semibold tracking-tight text-foreground lg:text-[2.6rem]">{formatAmount(item.amount)}</p>
+
+          <dl className="mt-4 divide-y divide-border/70 rounded-2xl border border-card/70 bg-card/70 px-4 text-sm">
+            <div className="flex items-center gap-3 py-3">
+              <CircleDollarSign className="size-4.5 text-muted-foreground" aria-hidden="true" />
+              <dt className="flex-1 text-foreground/80">Total en sobre</dt>
+              <dd className="font-medium text-foreground tabular-nums">{formatAmount(item.amount)}</dd>
+            </div>
+            <div className="flex items-center gap-3 py-3">
+              <Plus className="size-4.5 rounded-sm border border-muted-foreground/60 p-px text-muted-foreground" aria-hidden="true" />
+              <dt className="flex-1 text-foreground/80">Movimientos</dt>
+              <dd className="font-medium text-foreground tabular-nums">{item.movements}</dd>
+            </div>
+            <div className="flex items-center gap-3 py-3">
+              <Clock3 className="size-4.5 text-muted-foreground" aria-hidden="true" />
+              <dt className="flex-1 text-foreground/80">Último movimiento</dt>
+              <dd className="font-medium text-foreground tabular-nums">{formatShortDate(item.lastMovement)}</dd>
+            </div>
+          </dl>
+        </motion.div>
+      </AnimatePresence>
+
+      <Button
+        className="mt-5 h-14 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/30 [&_svg:not([class*='size-'])]:size-5"
+        disabled={busy}
+        onClick={extracted ? onReturn : onExtract}
+      >
+        {extracted ? <ArrowLeft /> : <Upload />}
+        {extracted ? "Regresar sobre" : "Extraer sobre"}
+      </Button>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" onClick={soon}>
+          <ArrowLeftRight /> Mover dinero
+        </Button>
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" onClick={soon}>
+          <Pencil /> Editar
+        </Button>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" aria-label="Sobre anterior" disabled={busy} onClick={() => onStep(-1)} className="rounded-full">
+            <ChevronLeft />
+          </Button>
+          <span className="flex items-center gap-1.5" aria-label={`Sobre ${index + 1} de ${envelopesMock.length}`} role="img">
+            {envelopesMock.map((envelope) => (
+              <span
+                key={envelope.id}
+                className={cn("h-1.5 rounded-full bg-foreground/25 transition-all", envelope.id === item.id ? "w-4 bg-foreground/70" : "w-1.5")}
+              />
+            ))}
+          </span>
+          <Button variant="ghost" size="icon" aria-label="Sobre siguiente" disabled={busy} onClick={() => onStep(1)} className="rounded-full">
+            <ChevronRight />
+          </Button>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={extracted ? "Regresar sobre" : "Atrás"}
+          disabled={busy || stage === "closed"}
+          onClick={onBack}
+          className="rounded-full bg-card/80 shadow-sm"
+        >
+          <RotateCcw />
+        </Button>
+      </div>
+    </section>
+  );
+}

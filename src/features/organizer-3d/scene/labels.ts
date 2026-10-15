@@ -24,9 +24,7 @@ const ICON_PATHS: Record<EnvelopeIcon, string[]> = {
     "M3 10h18",
     "M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01",
   ],
-  shield: [
-    "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
-  ],
+  chart: ["M5 14h2.5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1z", "M10.75 9h2.5a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-2.5a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z", "M16.5 3H19a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-2.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"],
 };
 
 /** Proporción de la etiqueta (ancho/alto) para que el plano 3D no deforme el texto. */
@@ -41,35 +39,24 @@ function fontFamily(): string {
 
 function draw(ctx: CanvasRenderingContext2D, item: EnvelopeItem) {
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
-  // Etiqueta de papel blanco ligeramente translúcida, como una tarjeta dentro del plástico.
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  ctx.beginPath();
-  ctx.roundRect(6, 14, WIDTH - 12, HEIGHT - 28, 46);
-  ctx.fill();
-
-  // Icono en un cuadro del color del sobre.
-  const box = HEIGHT - 64;
-  ctx.fillStyle = item.color;
-  ctx.globalAlpha = 0.24;
-  ctx.beginPath();
-  ctx.roundRect(32, 32, box, box, 30);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  // Impreso directo sobre el plástico esmerilado: icono de trazo y nombre.
+  const box = HEIGHT * 0.66;
+  const top = (HEIGHT - box) / 2;
   ctx.save();
-  const scale = (box * 0.6) / 24;
-  ctx.translate(32 + box * 0.2, 32 + box * 0.2);
+  const scale = box / 24;
+  ctx.translate(18, top);
   ctx.scale(scale, scale);
-  ctx.strokeStyle = shade(item.color, -0.35);
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = shade(item.color, -0.42);
+  ctx.lineWidth = 1.7;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ICON_PATHS[item.icon].forEach((d) => ctx.stroke(new Path2D(d)));
   ctx.restore();
 
-  ctx.fillStyle = "#2f3742";
-  ctx.font = `600 84px ${fontFamily()}`;
+  ctx.fillStyle = "#353a45";
+  ctx.font = `500 92px ${fontFamily()}`;
   ctx.textBaseline = "middle";
-  ctx.fillText(item.name, 64 + box, HEIGHT / 2 + 4, WIDTH - box - 110);
+  ctx.fillText(item.name, 60 + box * 1.1, HEIGHT / 2 + 4, WIDTH - box - 110);
 }
 
 /** Oscurece (negativo) o aclara (positivo) un color hex. */

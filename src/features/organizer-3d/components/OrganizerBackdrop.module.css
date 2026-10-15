@@ -1,0 +1,94 @@
+/*
+ * Fondo de la escena: habitación cálida desenfocada (luz de ventana, bokeh,
+ * planta y bowl fuera de foco) y una mesa clara. Paleta propia intencional
+ * de la escena, con su variante para el tema oscuro.
+ * Si se agrega una foto (`--backdrop-photo`), va encima de los degradados.
+ */
+.backdrop {
+  --wall-top: #f2e0da;
+  --wall-bottom: #edd3cb;
+  --table-top: #efdcd5;
+  --table-bottom: #f7ece8;
+  --glow: rgba(255, 246, 236, 0.95);
+  --bokeh: rgba(255, 238, 222, 0.9);
+  --plant: rgba(88, 116, 74, 0.55);
+  --plant-light: rgba(150, 170, 112, 0.45);
+  --bowl: rgba(236, 196, 186, 0.9);
+  --vignette: rgba(120, 72, 64, 0.1);
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    var(--backdrop-photo, none) center / cover no-repeat,
+    /* Mesa: plano claro a partir del 64 % de la altura. */
+    linear-gradient(180deg, transparent 0 62%, var(--table-top) 66%, var(--table-bottom) 100%),
+    linear-gradient(180deg, var(--wall-top) 0%, var(--wall-bottom) 62%);
+}
+
+:global(.dark) .backdrop {
+  --wall-top: #2b1f24;
+  --wall-bottom: #241a1f;
+  --table-top: #2f2227;
+  --table-bottom: #382a2f;
+  --glow: rgba(255, 196, 170, 0.18);
+  --bokeh: rgba(255, 200, 170, 0.22);
+  --plant: rgba(52, 74, 46, 0.55);
+  --plant-light: rgba(84, 108, 64, 0.35);
+  --bowl: rgba(120, 80, 76, 0.55);
+  --vignette: rgba(0, 0, 0, 0.35);
+}
+
+/* Luz de ventana desde arriba a la derecha + viñeta suave. */
+.backdrop::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(40% 45% at 78% 18%, var(--glow), transparent 70%),
+    radial-gradient(35% 40% at 22% 8%, var(--glow), transparent 70%),
+    radial-gradient(120% 90% at 50% 45%, transparent 55%, var(--vignette) 100%);
+}
+
+/* Bokeh: luces cálidas fuera de foco. */
+.bokeh {
+  position: absolute;
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--bokeh) 0%, transparent 70%);
+  filter: blur(6px);
+}
+
+/* Planta desenfocada en el borde izquierdo. */
+.plant {
+  position: absolute;
+  left: -4%;
+  top: 8%;
+  width: 16%;
+  height: 52%;
+  background:
+    radial-gradient(35% 22% at 40% 20%, var(--plant), transparent 70%),
+    radial-gradient(30% 20% at 70% 40%, var(--plant-light), transparent 70%),
+    radial-gradient(40% 25% at 30% 55%, var(--plant), transparent 72%),
+    radial-gradient(30% 18% at 65% 72%, var(--plant-light), transparent 70%);
+  filter: blur(18px);
+}
+
+/* Bowl de cerámica desenfocado sobre la mesa, abajo a la izquierda. */
+.bowl {
+  position: absolute;
+  left: -3%;
+  bottom: 14%;
+  width: 14%;
+  height: 16%;
+  border-radius: 50% 50% 46% 46% / 30% 30% 70% 70%;
+  background: radial-gradient(70% 60% at 50% 30%, var(--bowl), transparent 75%);
+  filter: blur(10px);
+}
+
+@media (max-width: 1023px) {
+  .plant,
+  .bowl {
+    display: none;
+  }
+}

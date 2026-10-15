@@ -10,7 +10,6 @@ const AdminLayout = ({ children }: LayoutProps) => {
   const items: NavItem[] = [
     { label: "Inicio", url: "/", icon: "home" },
     { label: "Dashboard", url: "/dashboard", icon: "layoutDashboard" },
-    { label: "Organizador", url: "/organizer", icon: "wallet" },
     { label: "Showcase", url: "/showcase", icon: "layoutGrid" },
     { label: "Feature de ejemplo", url: "/example", icon: "listChecks" },
   ];

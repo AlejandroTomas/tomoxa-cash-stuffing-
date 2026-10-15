@@ -12,7 +12,7 @@ import { NotchToaster } from "@/components/feedback/notch/NotchToaster";
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <StoreProvider>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <NotchToaster />
         <GlobalAlerts />
         <GlobalConfirmDialog />

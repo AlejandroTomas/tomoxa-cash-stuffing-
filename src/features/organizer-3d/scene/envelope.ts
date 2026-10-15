@@ -19,42 +19,40 @@ export interface EnvelopePart {
 const EW = ENVELOPE.width;
 const EH = ENVELOPE.height;
 const TOP = EH / 2;
-const ZIP_Y = TOP - 0.11;
-const LABEL_H = 0.36;
-const LABEL_Y = TOP - 0.34;
+const LABEL_H = 0.42;
+const LABEL_Y = TOP - 0.36;
 
 /** Geometrías comunes a los seis sobres: se crean una vez. */
 export interface EnvelopeGeometries {
   back: THREE.BufferGeometry;
+  sleeve: THREE.BufferGeometry;
   front: THREE.BufferGeometry;
   weld: THREE.BufferGeometry;
-  header: THREE.BufferGeometry;
-  tape: THREE.BufferGeometry;
-  tooth: THREE.BufferGeometry;
-  slider: THREE.BufferGeometry;
-  pull: THREE.BufferGeometry;
+  lip: THREE.BufferGeometry;
+  leftTab: THREE.BufferGeometry;
+  rightTab: THREE.BufferGeometry;
   note: THREE.BufferGeometry;
   label: THREE.BufferGeometry;
 }
 
 export function createEnvelopeGeometries(): EnvelopeGeometries {
   return {
-    back: roundedSlab(EW, EH, 0.02, 0.16, 0.008),
-    front: roundedSlab(EW - 0.04, EH - 0.36, 0.012, 0.15, 0.005),
-    weld: roundedFrame(EW, EH, 0.16, 0.075, 0.012),
-    header: roundedSlab(EW - 0.2, 0.42, 0.008, 0.06, 0.003),
-    tape: roundedSlab(EW - 0.22, 0.09, 0.014, 0.035, 0.005),
-    tooth: new THREE.BoxGeometry(0.024, 0.048, 0.02),
-    slider: roundedSlab(0.17, 0.11, 0.055, 0.035, 0.015),
-    pull: roundedSlab(0.075, 0.2, 0.016, 0.03, 0.006),
-    note: roundedSlab(2.5, 1.25, 0.008, 0.06, 0.003),
+    back: roundedSlab(EW, EH, 0.03, 0.2, 0.012),
+    sleeve: roundedSlab(EW - 0.18, EH - 0.12, 0.012, 0.18, 0.005),
+    front: roundedSlab(EW - 0.02, EH - 0.16, 0.05, 0.2, 0.022),
+    weld: roundedFrame(EW, EH, 0.2, 0.07, 0.016),
+    lip: roundedSlab(EW - 0.12, 0.12, 0.07, 0.06, 0.03),
+    leftTab: roundedSlab(0.16, 0.42, 0.05, 0.05, 0.02),
+    rightTab: roundedSlab(0.4, 0.62, 0.035, 0.14, 0.014),
+    note: roundedSlab(2.4, 1.05, 0.008, 0.06, 0.003),
     label: new THREE.PlaneGeometry(LABEL_H * LABEL_ASPECT, LABEL_H),
   };
 }
 
 /**
- * Bolsa plástica con cierre: película trasera tintada, contenido de papel,
- * película frontal más clara, soldadura perimetral, cierre y etiqueta.
+ * Bolsa plástica esmerilada y gruesa: película trasera tintada, funda interior
+ * desplazada (efecto de doble capa), contenido de papel, cara frontal acolchada,
+ * soldadura perimetral, labio superior, pestañas de color y etiqueta impresa.
  * Solo representa: no conoce ni modifica montos.
  */
 export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialKit, geo: EnvelopeGeometries, maxAnisotropy: number): EnvelopePart {
@@ -74,39 +72,30 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
     layered.push([m, layer]);
     return m;
   };
+  const deep = `#${new THREE.Color(item.color).lerp(new THREE.Color("#3a3340"), 0.18).getHexString()}`;
 
-  add(geo.back, kit.plastic(item.color, { opacity: 0.8, roughness: 0.38, clearcoat: 0.5 }), [0, 0, -0.03], 0, true);
+  add(geo.back, kit.plastic(item.color, { opacity: 0.9, roughness: 0.5, clearcoat: 0.35, lighten: 0 }), [0, 0, -0.045], 0, true);
+  // Funda interior desplazada: la doble silueta de las bolsas de la referencia.
+  add(geo.sleeve, kit.plastic(item.color, { opacity: 0.5, roughness: 0.5, clearcoat: 0.3, lighten: 0.2 }), [0.1, 0.07, -0.022], 1);
 
   // Contenido: tarjetas de papel genéricas (no imitan billetes).
   const paper = kit.paper(item.tone);
-  add(geo.note, paper, [0.1, -0.22, -0.012], 1).rotation.z = 0.035;
-  add(geo.note, paper, [-0.08, -0.36, -0.002], 1).rotation.z = -0.025;
+  add(geo.note, paper, [0.15, -0.3, -0.012], 1).rotation.z = 0.03;
 
-  add(geo.front, kit.plastic(item.color, { opacity: 0.32, roughness: 0.14, clearcoat: 1, lighten: 0.25 }), [0, -0.18, 0.016], 2);
-  add(geo.weld, kit.plastic(item.color, { opacity: 0.9, roughness: 0.32, clearcoat: 0.6, lighten: 0.1 }), [0, 0, 0.02], 3);
-  add(geo.header, kit.plastic(item.color, { opacity: 0.9, roughness: 0.3, clearcoat: 0.8 }), [0, LABEL_Y + 0.02, 0.026], 3);
+  // Cara frontal acolchada y esmerilada: deja ver el contenido difuso.
+  add(geo.front, kit.plastic(item.color, { opacity: 0.74, roughness: 0.5, clearcoat: 0.6, lighten: 0.04 }), [0, -0.06, 0.012], 2);
+  add(geo.weld, kit.plastic(item.color, { opacity: 0.88, roughness: 0.4, clearcoat: 0.5, lighten: 0.3 }), [0, 0, 0.03], 3);
+  add(geo.lip, kit.plastic(item.color, { opacity: 0.9, roughness: 0.35, clearcoat: 0.8, lighten: 0.5 }), [0, TOP - 0.07, 0.03], 3);
 
-  // Cierre: cinta, dientes (una InstancedMesh), carro y jalador.
-  const dark = `#${new THREE.Color(item.color).lerp(new THREE.Color("#2b2f38"), 0.35).getHexString()}`;
-  add(geo.tape, kit.plastic(dark, { opacity: 0.97, roughness: 0.55, clearcoat: 0.2 }), [0, ZIP_Y, 0.024], 3);
-  const teethCount = Math.floor((EW - 0.5) / 0.04);
-  const teeth = new THREE.InstancedMesh(geo.tooth, kit.zipperTeeth, teethCount);
-  const matrix = new THREE.Matrix4();
-  for (let i = 0; i < teethCount; i++) {
-    matrix.makeTranslation(-(EW - 0.5) / 2 + i * 0.04, ZIP_Y + (i % 2 ? 0.011 : -0.011), 0.036);
-    teeth.setMatrixAt(i, matrix);
-  }
-  teeth.instanceMatrix.needsUpdate = true;
-  hover.add(teeth);
-  add(geo.slider, kit.chrome, [EW / 2 - 0.42, ZIP_Y, 0.05], 0, true);
-  const pull = add(geo.pull, kit.chrome, [EW / 2 - 0.42, ZIP_Y - 0.13, 0.075], 0);
-  pull.rotation.x = 0.35;
+  // Pestañas: una opaca en el borde izquierdo y otra translúcida asomando a la derecha.
+  add(geo.leftTab, kit.plastic(deep, { opacity: 0.96, roughness: 0.45, clearcoat: 0.4 }), [-EW / 2 + 0.02, LABEL_Y - 0.16, 0.02], 3);
+  if (index >= 2) add(geo.rightTab, kit.plastic(item.color, { opacity: 0.8, roughness: 0.5, clearcoat: 0.4, lighten: 0.1 }), [EW / 2 + 0.08, TOP - 0.42, -0.03], 0);
 
-  // Etiqueta impresa: texto real en canvas, legible en el encabezado visible.
+  // Etiqueta impresa sobre el plástico.
   const label = add(
     geo.label,
     kit.track(new THREE.MeshBasicMaterial({ map: kit.track(createLabelTexture(item, maxAnisotropy)), transparent: true, depthWrite: false, toneMapped: false })),
-    [-0.3, LABEL_Y, 0.034],
+    [-0.05, LABEL_Y, 0.042],
     4,
   );
   label.name = "label";

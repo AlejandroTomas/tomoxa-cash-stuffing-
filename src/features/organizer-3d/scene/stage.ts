@@ -21,7 +21,7 @@ export function createStage(mount: HTMLElement): Stage {
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 1.02;
+  renderer.toneMappingExposure = 0.8;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
@@ -39,11 +39,11 @@ export function createStage(mount: HTMLElement): Stage {
   room.dispose();
   pmrem.dispose();
   scene.environment = envMap;
-  scene.environmentIntensity = 0.62;
+  scene.environmentIntensity = 0.5;
 
-  scene.add(new THREE.HemisphereLight("#fffaf5", "#e9cfc9", 0.75));
+  scene.add(new THREE.HemisphereLight("#fffaf5", "#e6d6d2", 0.6));
 
-  const key = new THREE.DirectionalLight("#fff3e6", 2.3);
+  const key = new THREE.DirectionalLight("#fff3e6", 2);
   key.position.set(-4.5, 6.5, 9);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);

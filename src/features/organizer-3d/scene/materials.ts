@@ -47,15 +47,14 @@ export function createMaterialKit(maxAnisotropy: number): MaterialKit {
   };
 
   const leatherRepeat: [number, number] = [1.6, 2.1];
-  const leatherColor = load("leather_basecolor", true, leatherRepeat);
   const leatherNormal = load("leather_normal", false, leatherRepeat);
   const leatherRoughness = load("leather_roughness", false, leatherRepeat);
   const plasticNormal = load("plastic_normal", false, [2, 1.4]);
   const paperColor = load("paper_basecolor", true, [1, 1]);
 
   const leather = track(new THREE.MeshStandardMaterial({
-    color: "#ead2cf",
-    map: leatherColor,
+    // Color sólido (rosa empolvado): el albedo del mapa es demasiado saturado; el grano lo dan normal y rugosidad.
+    color: "#a8807c",
     normalMap: leatherNormal,
     normalScale: new THREE.Vector2(0.7, 0.7),
     roughnessMap: leatherRoughness,
@@ -63,17 +62,19 @@ export function createMaterialKit(maxAnisotropy: number): MaterialKit {
     envMapIntensity: 0.55,
   }));
   const leatherEdge = track(new THREE.MeshStandardMaterial({
-    color: "#c78e8c",
+    color: "#a87774",
     normalMap: leatherNormal,
     normalScale: new THREE.Vector2(0.4, 0.4),
     roughness: 0.62,
     envMapIntensity: 0.7,
   }));
+  // Interior: el mismo cuero, un tono más claro.
   const lining = track(new THREE.MeshStandardMaterial({
-    color: "#f4dcd3",
+    color: "#b38985",
     normalMap: leatherNormal,
-    normalScale: new THREE.Vector2(0.35, 0.35),
-    roughness: 0.9,
+    normalScale: new THREE.Vector2(0.55, 0.55),
+    roughnessMap: leatherRoughness,
+    roughness: 0.95,
     envMapIntensity: 0.45,
   }));
   const stitch = track(new THREE.MeshStandardMaterial({ color: "#fbeee6", roughness: 0.85 }));
