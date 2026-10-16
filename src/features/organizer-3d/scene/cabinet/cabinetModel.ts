@@ -12,6 +12,7 @@ import {
   cellCenter,
   drawerExitPath,
   drawerAjar,
+  drawerDeck,
   drawerRest,
   drawerSize,
   rowsFor,
@@ -140,7 +141,7 @@ export function createCabinetModel(runtime: SceneRuntime): SlotModel {
     add(geo.back, trayMaterial, 0, floorY + trayH / 2, trayZ - trayDepth / 2 + wallT / 2, 1);
     // Contenido: un fajo de papel genérico (no imita billetes).
     const paper = kit.paper(item.tone);
-    add(geo.paper, paper, 0.05, floorY + 0.13, trayZ + 0.1, 0);
+    const bundle = add(geo.paper, paper, 0.05, floorY + 0.13, trayZ + 0.1, 0);
     // Frente translúcido tintado, con canto pulido.
     add(geo.front, plastic(0.78, 0.22, 0.26), 0, 0, 0, 3);
     add(geo.notch, plastic(0.92, 0.05, 0.3, 0.25), 0, drawer.height / 2 - 0.14, CABINET.front / 2 + 0.002, 4);
@@ -164,6 +165,7 @@ export function createCabinetModel(runtime: SceneRuntime): SlotModel {
       group,
       hover,
       targets,
+      contents: bundle,
       mouth: (target) => hover.localToWorld(target.copy(mouthLocal)),
       restyle: (next) => {
         tinted.forEach(({ material, lighten, darken }) => {
@@ -190,6 +192,7 @@ export function createCabinetModel(runtime: SceneRuntime): SlotModel {
     exitPath: drawerExitPath,
     frame: cabinetFrame,
     presentFrame: (_index, count) => cabinetPresentFrame(count),
+    deck: drawerDeck(),
     dispose: () => {
       disposeShell();
       Object.values(geo).forEach((geometry) => geometry.dispose());

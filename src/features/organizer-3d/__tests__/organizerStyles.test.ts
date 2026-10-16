@@ -1,6 +1,7 @@
+import { DOCUMENT } from "../scene/layout";
 import { isOrganizerStyle, ORGANIZER_STYLES, parseOrganizerStyle, styleInfo } from "../domain/organizerStyle";
-import { CABINET, CABINET_VIEW, cabinetFrame, cabinetSize, cellCenter, drawerExitPath, drawerAjar, drawerPresent, drawerRest, drawerSize, rowsFor } from "../scene/cabinet/cabinetLayout";
-import { FILES, FILES_VIEW, filesSize, folderExitPath, folderAjar, folderPresent, folderRest } from "../scene/files/filesLayout";
+import { CABINET, CABINET_VIEW, cabinetFrame, cabinetSize, cellCenter, drawerCardsTop, drawerDeck, drawerExitPath, drawerAjar, drawerPresent, drawerRest, drawerSize, drawerTray, rowsFor } from "../scene/cabinet/cabinetLayout";
+import { FILES, FILES_VIEW, filesSize, folderCardsTop, folderDeck, folderExitPath, folderAjar, folderPresent, folderRest } from "../scene/files/filesLayout";
 import { apparentSize, facing, normalize, type Pose } from "../scene/slotModel";
 
 describe("estilo del organizador", () => {
@@ -112,5 +113,48 @@ describe("archivador", () => {
     const present = folderPresent(6);
     expect(present.z).toBeGreaterThan(filesSize(6).z / 2 + FILES.folderDepth / 2);
     expect(Math.sign(present.ry)).toBe(Math.sign(FILES_VIEW.x));
+  });
+});
+
+describe("documentos en el fichero (cajonera y archivador)", () => {
+  const cardHalf = (pose: { scale: number }) => ({ h: (DOCUMENT.height / 2) * pose.scale, w: (DOCUMENT.width / 2) * pose.scale });
+
+  it("cajonera: las fichas caben en la bandeja y no se tocan", () => {
+    const deck = drawerDeck();
+    const tray = drawerTray();
+    for (let index = 0; index < deck.maxShown; index++) {
+      const card = deck.shown(index, deck.maxShown);
+      const { h, w } = cardHalf(card);
+      expect(Math.abs(card.x) + w).toBeLessThan(tray.halfWidth);
+      // Su base (adelantada por la inclinación) dentro de la bandeja, sin hundirse en el piso.
+      const baseZ = card.z + h * Math.sin(-card.rx);
+      expect(baseZ).toBeLessThan(tray.front);
+      expect(card.z - h * Math.sin(-card.rx)).toBeGreaterThan(tray.back);
+      expect(card.y - h).toBeGreaterThan(tray.floorTop - 0.01);
+      if (index > 0) expect(deck.shown(index - 1, deck.maxShown).z - card.z).toBeGreaterThan(0.05);
+    }
+  });
+
+  it("cajonera: guardadas quedan bajo el piso y la que cruza libra a todas y al cajón", () => {
+    const deck = drawerDeck();
+    for (let slot = 0; slot < deck.maxShown; slot++) {
+      const inside = deck.inside(slot, deck.maxShown);
+      expect(inside.y + cardHalf(inside).h).toBeLessThan(deck.clipY);
+    }
+    const bottom = deck.travelY - cardHalf(deck.shown(0, 1)).h;
+    expect(bottom).toBeGreaterThan(drawerCardsTop());
+    expect(bottom).toBeGreaterThan(drawerSize().height / 2);
+  });
+
+  it("archivador: asoman por la boca, guardadas quedan dentro y la que cruza libra a todas", () => {
+    const deck = folderDeck();
+    for (let index = 0; index < deck.maxShown; index++) {
+      const card = deck.shown(index, deck.maxShown);
+      expect(card.y + cardHalf(card).h).toBeGreaterThan(deck.clipY);
+      expect(Math.abs(card.z)).toBeLessThan(FILES.folderDepth / 2);
+      const inside = deck.inside(index, deck.maxShown);
+      expect(inside.y + cardHalf(inside).h).toBeLessThan(deck.clipY);
+    }
+    expect(deck.travelY - cardHalf(deck.shown(0, 1)).h).toBeGreaterThan(folderCardsTop());
   });
 });

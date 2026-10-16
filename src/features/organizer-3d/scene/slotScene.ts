@@ -1,9 +1,12 @@
 import * as THREE from "three";
+import type { EnvelopeDocument } from "../domain/document";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import type { OrganizerSceneApi, SceneIntent } from "./contract";
+import { createDocumentDeck, type DeckLayout, type DocumentDeck } from "./documentDeck";
+import { DOCUMENT } from "./layout";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
 import { createSceneRuntime, type SceneRuntime } from "./runtime";
-import type { FrameTarget, Pose, SlotModel, SlotPart, Vec3 } from "./slotModel";
+import { facing, type FrameTarget, type Pose, type SlotModel, type SlotPart, type Vec3 } from "./slotModel";
 
 type SceneStage = "closed" | "open" | "browsing" | "reading";
 
@@ -13,8 +16,8 @@ const isOut = (stage: SceneStage) => stage === "browsing" || stage === "reading"
  * Escena de un organizador "de ranuras" (cajonera, archivador) con el mismo
  * contrato que la carpeta. Las animaciones son genéricas (timelines de GSAP
  * entre poses); `buildModel` aporta la geometría y las poses de cada estilo.
- * Los documentos en 3D son de la carpeta: aquí abrir un sobre lo saca y lo
- * presenta, y el panel de documentos de la interfaz muestra su contenido.
+ * Abrir un sobre lo saca, lo presenta y sus documentos asoman como en un
+ * fichero (`documentDeck`, el mismo que usa la carpeta de anillas).
  */
 export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (runtime: SceneRuntime) => SlotModel): OrganizerSceneApi {
   const runtime = createSceneRuntime(mount, viewDir);
@@ -37,6 +40,8 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
   let intentListener: ((intent: SceneIntent) => void) | null = null;
   let hovered: SlotPart | null = null;
   let flyingTokens: MoneyTokens | null = null;
+  let deck: DocumentDeck | null = null;
+  let deckOwner: SlotPart | null = null;
 
   const count = () => Math.max(1, parts.length);
   function indexParts() {
@@ -46,10 +51,22 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
 
   // ── Encuadres ─────────────────────────────────────────────────────────────
   const openFrame = () => model.frame("open", count());
+  /** Con la pieza presentada: su encuadre, crecido hacia arriba para el documento que cruza por encima (casi entero). */
+  const presentFrame = (part: SlotPart): FrameTarget => {
+    const frame = model.presentFrame(part.index, count());
+    const path = model.exitPath(part.index, count());
+    const present = path[path.length - 1];
+    const card = model.deck.shown(0, 1);
+    // Hasta un poco arriba del centro del que cruza: es un instante y así la vista normal queda más cerca.
+    const travelTop = present.y + (model.deck.travelY + (DOCUMENT.height / 4) * card.scale) * present.scale;
+    const bottom = frame.center.y - frame.height / 2;
+    const top = Math.max(frame.center.y + frame.height / 2, travelTop);
+    return { ...frame, center: { ...frame.center, y: (top + bottom) / 2 }, height: top - bottom };
+  };
   const frameNow = (): FrameTarget => {
     const part = activeId ? byId.get(activeId) : undefined;
     if (stage === "closed") return model.frame("overview", count());
-    if (part && isOut(stage)) return model.presentFrame(part.index, count());
+    if (part && isOut(stage)) return presentFrame(part);
     return openFrame();
   };
 
@@ -104,7 +121,8 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     activeId = null;
     clearHover();
     await runtime.play((tl) => {
-      const start = part && wasOut ? returnAlongPath(tl, part, 0) : 0;
+      const stowed = part && wasOut ? stowDeck(tl, 0) : 0;
+      const start = part && wasOut ? returnAlongPath(tl, part, stowed) : 0;
       parts.forEach((each) => toPose(tl, each, model.rest(each.index, count()), start, d(0.5), "power2.inOut"));
       runtime.cameraTo(tl, () => model.frame("overview", count()), start, d(1.1));
     });
@@ -118,19 +136,64 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     return followPath(tl, part, back, at, durations);
   }
 
-  /** Saca la pieza de su lugar y la presenta (los documentos los muestra la interfaz). */
-  async function openEnvelope(id: EnvelopeId) {
+  /**
+   * Giro (local de la pieza presentada) con el que un documento queda de cara a
+   * la cámara: el de la cámara menos el de la pieza.
+   */
+  function readingRotation(part: SlotPart): { rx: number; ry: number; rz: number } {
+    const path = model.exitPath(part.index, count());
+    const present = path[path.length - 1];
+    const face = facing(viewDir);
+    const pieceTurn = new THREE.Quaternion().setFromEuler(new THREE.Euler(present.rx, present.ry, present.rz, "YXZ"));
+    const cameraTurn = new THREE.Quaternion().setFromEuler(new THREE.Euler(face.rx, face.ry, 0, "YXZ"));
+    const local = new THREE.Euler().setFromQuaternion(pieceTurn.invert().multiply(cameraTurn), "YXZ");
+    return { rx: local.x, ry: local.y, rz: local.z };
+  }
+
+  function deckLayout(part: SlotPart): DeckLayout {
+    const { reading, ...layout } = model.deck;
+    return { ...layout, reading: { ...reading, ...readingRotation(part) } };
+  }
+
+  /** Guarda los documentos (el que está fuera, por arriba) y los libera. Devuelve cuándo termina. */
+  function stowDeck(tl: gsap.core.Timeline, at: number): number {
+    const current = deck;
+    const owner = deckOwner;
+    if (!current) return at;
+    const end = current.stowAll(tl, at);
+    tl.call(() => {
+      current.dispose();
+      if (owner?.contents) owner.contents.visible = true;
+      if (deck === current) {
+        deck = null;
+        deckOwner = null;
+      }
+    }, [], end);
+    return end;
+  }
+
+  /** Saca la pieza de su lugar, la presenta y sus documentos asoman en cascada. */
+  async function openEnvelope(id: EnvelopeId, documents: readonly EnvelopeDocument[], visibleIds: readonly string[]) {
     const part = byId.get(id);
     if (!part || runtime.isDisposed() || stage !== "open") return;
     stage = "browsing";
     activeId = id;
     clearHover();
+    deck?.dispose();
+    deck = createDocumentDeck(part.hover, documents, visibleIds, deckLayout(part), d, runtime.maxAnisotropy);
+    deckOwner = part;
+    const opened = deck;
     await runtime.play((tl) => {
       settleHover(tl, part, 0);
       const path = model.exitPath(part.index, count());
       const durations = path.length > 2 ? [0.5, 0.45, 0.75] : [0.6, 0.8];
       const end = followPath(tl, part, path, 0, durations);
-      runtime.cameraTo(tl, () => model.presentFrame(part.index, count()), end * 0.3, Math.max(d(0.5), end * 0.75));
+      runtime.cameraTo(tl, () => presentFrame(part), end * 0.3, Math.max(d(0.5), end * 0.75));
+      // Ya presentada, el adorno de adentro se va y los documentos suben desde el fondo.
+      tl.call(() => {
+        if (part.contents) part.contents.visible = false;
+      }, [], end - d(0.1));
+      opened.arrange(tl, end - d(0.1), d(0.06));
     });
   }
 
@@ -140,17 +203,33 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     stage = "open";
     activeId = null;
     await runtime.play((tl) => {
-      settleHover(tl, part, 0);
-      const end = returnAlongPath(tl, part, 0);
-      runtime.cameraTo(tl, openFrame, end * 0.2, Math.max(d(0.5), end * 0.8));
+      const stowed = stowDeck(tl, 0);
+      settleHover(tl, part, stowed);
+      const end = returnAlongPath(tl, part, stowed);
+      runtime.cameraTo(tl, openFrame, stowed + (end - stowed) * 0.2, Math.max(d(0.5), (end - stowed) * 0.8));
     });
   }
 
-  async function pickDocument() {
-    if (stage === "browsing" || stage === "reading") stage = "reading";
+  function showDocuments(visibleIds: readonly string[]) {
+    const current = deck;
+    current?.setShown(visibleIds);
+    if (!current || runtime.isDisposed() || !isOut(stage) || runtime.isRunning()) return;
+    void runtime.play((tl) => current.arrange(tl, 0, d(0.03)));
   }
+
+  async function pickDocument(id: string) {
+    const current = deck;
+    if (!current?.has(id) || runtime.isDisposed() || !isOut(stage)) return;
+    stage = "reading";
+    // El que estaba fuera vuelve a su lugar; el nuevo sale cuando aquel ya cruzó.
+    await runtime.play((tl) => void current.pick(tl, id, 0));
+  }
+
   async function returnDocument() {
-    if (stage === "reading") stage = "browsing";
+    const current = deck;
+    if (!current?.pickedId || runtime.isDisposed() || stage !== "reading") return;
+    stage = "browsing";
+    await runtime.play((tl) => void current.putBack(tl, 0));
   }
 
   /** Dónde queda la boca de una pieza cuando está entreabierta (ahí entran o salen las fichas). */
@@ -292,6 +371,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
   });
 
   // ── Puntero ───────────────────────────────────────────────────────────────
+  const documentOf = (object: THREE.Object3D | null): string | undefined => object?.userData.documentId as string | undefined;
   const partOf = (object: THREE.Object3D | null): SlotPart | undefined => {
     const id = object?.userData.envelopeId as EnvelopeId | undefined;
     return id ? byId.get(id) : undefined;
@@ -316,15 +396,20 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
       const canHover = stage === "closed" || stage === "open";
       setHover(canHover && part ? part : null);
       if (stage === "closed") return Boolean(object);
-      if (isOut(stage)) return Boolean(part) && part?.item.id !== activeId;
+      if (isOut(stage)) return Boolean(documentOf(object)) || (Boolean(part) && part?.item.id !== activeId);
       return Boolean(part);
     },
     tap: (object) => {
+      const document = documentOf(object);
+      if (document) {
+        intentListener?.({ type: "document", id: document });
+        return;
+      }
       const part = partOf(object);
       if (part) intentListener?.({ type: "envelope", id: part.item.id });
       else if (object) intentListener?.({ type: "binder" });
     },
-    swipe: (direction, startedOn) => intentListener?.({ type: "swipe", direction, envelope: partOf(startedOn)?.item.id }),
+    swipe: (direction, startedOn) => intentListener?.({ type: "swipe", direction, envelope: partOf(startedOn)?.item.id, document: documentOf(startedOn) }),
     // La pieza presentada sigue un poco al dedo en vertical; al soltar vuelve.
     drag: (_dx, dy) => {
       const part = activeId ? byId.get(activeId) : undefined;
@@ -345,7 +430,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     close,
     openEnvelope,
     closeEnvelope,
-    showDocuments: () => undefined,
+    showDocuments,
     pickDocument,
     returnDocument,
     transfer,
@@ -359,6 +444,8 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
       intentListener = null;
       flyingTokens?.dispose();
       flyingTokens = null;
+      deck?.dispose();
+      deck = null;
       parts.forEach((part) => part.dispose());
       parts = [];
       model.dispose();

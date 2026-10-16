@@ -45,10 +45,30 @@ export interface SlotPart {
   targets: THREE.Object3D[];
   /** Punto (mundo) por donde entran o salen las fichas de dinero. */
   mouth: (target: THREE.Vector3) => THREE.Vector3;
+  /** Contenido de adorno (el fajo de papel del cajón): se oculta mientras se ven los documentos. */
+  contents?: THREE.Object3D;
   /** Recolorea y reimprime la etiqueta (editar sobre, con vista previa en vivo). */
   restyle: (item: EnvelopeItem) => void;
   /** Quita la pieza de la escena y libera sus materiales (las geometrías son compartidas). */
   dispose: () => void;
+}
+
+/**
+ * Documentos de una pieza abierta, como en un fichero: de pie uno detrás de
+ * otro, con la parte de arriba a la vista. Coordenadas de la pieza (`hover`).
+ */
+export interface SlotDeck {
+  maxShown: number;
+  /** A la vista: `index` 0 = el más reciente (al frente). */
+  shown: (index: number, count: number) => Pose;
+  /** Guardado debajo de su lugar (por debajo de `clipY`, no se ve). */
+  inside: (slot: number, count: number) => Pose;
+  /** Altura (centro) a la que cruza el que sale o regresa: libra la punta de todos y la boca. */
+  travelY: number;
+  /** Boca de la pieza: por debajo no se dibujan (parece que salen de adentro). */
+  clipY: number;
+  /** Dónde se lee (al frente de la pieza); la escena calcula el giro para quedar de cara a la cámara. */
+  reading: Vec3 & { scale: number };
 }
 
 export interface SlotModel {
@@ -69,6 +89,8 @@ export interface SlotModel {
    */
   exitPath: (index: number, count: number) => Pose[];
   frame: (kind: FrameKind, count: number) => FrameTarget;
+  /** Documentos de la pieza abierta. */
+  deck: SlotDeck;
   /** Encuadre con la pieza presentada: ella al centro y el organizador todavía a la vista. */
   presentFrame: (index: number, count: number) => FrameTarget;
   dispose: () => void;

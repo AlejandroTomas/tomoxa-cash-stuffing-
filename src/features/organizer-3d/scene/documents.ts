@@ -25,14 +25,14 @@ export function createDocumentStack(docs: readonly EnvelopeDocument[], maxAnisot
   const body = roundedSlab(DOCUMENT.width, DOCUMENT.height, PAPER, 0.06, 0.003);
   const face = new THREE.PlaneGeometry(DOCUMENT.width - 0.01, DOCUMENT.height - 0.01);
   const owned: Array<THREE.Material | THREE.Texture | THREE.BufferGeometry> = [body, face];
-  const edge = new THREE.MeshStandardMaterial({ color: "#f4efe6", roughness: 0.92 });
-  owned.push(edge);
 
   docs.forEach((doc, order) => {
     const texture = createDocumentTexture(doc, maxAnisotropy);
     // alphaTest: las esquinas redondeadas del canvas son transparentes.
     const print = new THREE.MeshStandardMaterial({ map: texture, alphaTest: 0.5, roughness: 0.88, envMapIntensity: 0.3 });
-    owned.push(texture, print);
+    // Canto propio de cada documento: así se puede recortar uno sin tocar a los demás.
+    const edge = new THREE.MeshStandardMaterial({ color: "#f4efe6", roughness: 0.92 });
+    owned.push(texture, print, edge);
     const mesh = new THREE.Mesh(body, edge);
     const printed = new THREE.Mesh(face, print);
     printed.position.z = PAPER / 2 + 0.001;

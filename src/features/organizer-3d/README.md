@@ -99,8 +99,13 @@ regresarlo son `openEnvelope` y `closeEnvelope`.
   - Archivador: carpetas en fila sobre placa champán y bandeja de acrílico. Hover:
     sube un poco; al tocarla sube hasta librar las paredes, sale al frente y viene al
     centro girando hacia la cámara.
-- **Documentos en 3D** (abanico de tickets) son de la carpeta. En los otros estilos
-  "Abrir sobre" muestra el panel de documentos igual, sin abanico.
+- **Documentos en 3D** en los tres estilos, con el mismo módulo (`scene/documentDeck.ts`);
+  cada estilo da sus poses (`DeckLayout` / `SlotModel.deck`). Carpeta: abanico arriba de
+  la boca del sobre. Cajonera: fichero dentro del cajón, el más reciente al frente y a la
+  derecha, los anteriores escalonados hacia atrás (el fajo de papel se oculta). Archivador:
+  fichas que asoman por la boca de la carpeta. En los dos últimos las fichas se recortan
+  bajo el piso o la boca (`clipY`, planos de recorte por material), así "salen de adentro";
+  al filtrar, la que cambia de lugar baja y vuelve a subir en el nuevo, sin cruzar a nadie.
 - **Cambiar de estilo** (selector en la barra o sobre la escena en móvil): el lienzo se
   desvanece (220 ms; nada con reduced motion), la escena anterior se libera (timelines,
   geometrías, materiales, texturas y contexto WebGL con `forceContextLoss`) y la nueva
@@ -119,7 +124,10 @@ inclina y los movimientos asoman como tickets en abanico (máx. 8; el más recie
 (Todo · Día · Semana · Mes · Fecha + texto) reacomoda el abanico y la frase que la
 describe (`describeFilter`) se escribe en Caveat en la tarjeta y en una etiqueta de
 papel sobre el sobre. Tocar un ticket (o la lista) lo saca al frente; Escape retrocede
-un nivel. El sobre presentado siempre queda delante de la pila; en pantallas angostas
+un nivel. **Solo se mueve el elegido:** sube en su plano hasta que su borde inferior
+libra la punta de todos los demás y la boca (`travelY`), cruza a esa altura y baja
+al frente; al regresar hace el camino al revés y baja en su plano, detrás de los
+de enfrente. Nada se atraviesa y nadie más se mueve. El sobre presentado siempre queda delante de la pila; en pantallas angostas
 se achica en lugar de meterse entre los demás.
 
 ## Mover dinero, crear, editar y archivar sobres

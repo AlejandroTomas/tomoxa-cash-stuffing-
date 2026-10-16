@@ -4,7 +4,7 @@ import { roundedSlab, stitches } from "../geometry";
 import { createLabelTexture, redrawLabel, STACKED_LABEL_ASPECT } from "../labels";
 import type { SceneRuntime } from "../runtime";
 import type { SlotModel, SlotPart } from "../slotModel";
-import { FILES, filesFrame, filesPresentFrame, filesSize, folderExitPath, folderAjar, folderRest } from "./filesLayout";
+import { FILES, filesFrame, filesPresentFrame, filesSize, folderDeck, folderExitPath, folderAjar, folderRest } from "./filesLayout";
 
 /**
  * Archivador de escritorio: placa champán, bandeja de acrílico transparente
@@ -173,6 +173,7 @@ export function createFilesModel(runtime: SceneRuntime): SlotModel {
     exitPath: folderExitPath,
     frame: filesFrame,
     presentFrame: (_index, count) => filesPresentFrame(count),
+    deck: folderDeck(),
     dispose: () => {
       disposeBase();
       Object.values(geo).forEach((geometry) => geometry.dispose());

@@ -1,4 +1,5 @@
-import { apparentSize, facing, normalize, type FrameKind, type FrameTarget, type Pose, type Vec3 } from "../slotModel";
+import { DOCUMENT } from "../layout";
+import { apparentSize, facing, normalize, type FrameKind, type FrameTarget, type Pose, type SlotDeck, type Vec3 } from "../slotModel";
 
 /**
  * Medidas de la cajonera (unidades de escena, ≈ 1 = 3 cm). Mesa = plano XZ,
@@ -107,12 +108,88 @@ export function cabinetFrame(kind: FrameKind, count: number): FrameTarget {
 export function cabinetPresentFrame(count: number): FrameTarget {
   const present = drawerPresent(count);
   const center = cabinetCenter(count);
-  const t = 0.4;
+  // Más cerca del cajón que de la cajonera: él y sus documentos son lo importante.
+  const t = 0.6;
   const size = cabinetSize(count);
   const seen = apparentSize(size, CABINET_VIEW);
   return {
     center: { x: center.x + (present.x - center.x) * t, y: center.y + (present.y - center.y) * t, z: center.z + (present.z - center.z) * t },
-    width: Math.max(seen.width * 0.95, drawerSize().width * 2.4),
-    height: seen.height * 0.98,
+    width: Math.max(seen.width * 0.8, drawerSize().width * 2.2),
+    height: seen.height * 0.8,
+  };
+}
+
+// ── Documentos: un fichero dentro del cajón ─────────────────────────────────
+
+/** Bandeja del cajón (coordenadas del cajón: origen en el centro del frente, +z hacia afuera). */
+export function drawerTray() {
+  const drawer = drawerSize();
+  const wall = 0.035;
+  const floorTop = -drawer.height / 2 + 0.02 + wall;
+  return {
+    floorTop,
+    /** Cara interior del frente y de la pared del fondo. */
+    front: -CABINET.front / 2,
+    back: -CABINET.front / 2 - (drawer.depth - CABINET.front) + wall,
+    halfWidth: (drawer.width - 0.08) / 2 - wall,
+  };
+}
+
+/** Las fichas van más chicas que en la carpeta de anillas: el cajón es bajo. */
+export const DRAWER_CARD_SCALE = 0.62;
+const CARD_GAP = 0.2;
+/** Las fichas se recargan un poco hacia atrás, como en un fichero. */
+const CARD_LEAN = -0.08;
+/** Cuánto asoma la ficha del frente sobre el borde del cajón; cada una de atrás, `CARD_STEP` más. */
+const CARD_SHOW = 0.32;
+const CARD_STEP = 0.1;
+/** Abanico en profundidad: la más reciente al frente y a la derecha; las anteriores, atrás y a la izquierda. */
+const CARD_SPREAD = 0.62;
+
+/** Ficha `index` (0 = la más reciente) de `count`, de pie dentro del cajón. */
+function drawerCard(index: number, count: number): Pose {
+  const tray = drawerTray();
+  const n = Math.max(1, Math.min(count, DOCUMENT.maxFan));
+  const t = n === 1 ? 0.5 : index / (n - 1);
+  const half = (DOCUMENT.height / 2) * DRAWER_CARD_SCALE;
+  const top = drawerSize().height / 2 + CARD_SHOW + index * CARD_STEP;
+  return {
+    x: n === 1 ? 0 : CARD_SPREAD / 2 - CARD_SPREAD * t,
+    y: top - half * Math.cos(CARD_LEAN),
+    z: tray.front - 0.25 - index * CARD_GAP,
+    rx: CARD_LEAN,
+    ry: 0,
+    rz: n === 1 ? 0 : (t - 0.5) * 0.12,
+    scale: DRAWER_CARD_SCALE,
+  };
+}
+
+/** Punta más alta de las fichas a la vista (con la inclinación y el giro). */
+export function drawerCardsTop(count: number = DOCUMENT.maxFan): number {
+  let top = -Infinity;
+  for (let index = 0; index < Math.max(1, Math.min(count, DOCUMENT.maxFan)); index++) {
+    const card = drawerCard(index, count);
+    const halfH = (DOCUMENT.height / 2) * card.scale;
+    const halfW = (DOCUMENT.width / 2) * card.scale;
+    top = Math.max(top, card.y + halfH * Math.cos(CARD_LEAN) + halfW * Math.abs(Math.sin(card.rz)));
+  }
+  return top;
+}
+
+export function drawerDeck(): SlotDeck {
+  const tray = drawerTray();
+  const height = DOCUMENT.height * DRAWER_CARD_SCALE;
+  return {
+    maxShown: DOCUMENT.maxFan,
+    shown: (index, count) => drawerCard(index, count),
+    // Guardada: hundida en su plano hasta quedar bajo el piso (recortada, no se ve).
+    inside: (slot, count) => {
+      const card = drawerCard(Math.min(slot, DOCUMENT.maxFan - 1), Math.max(count, slot + 1));
+      const sink = card.y + height / 2 - tray.floorTop + 0.05;
+      return { ...card, y: card.y - sink, z: card.z - sink * Math.tan(CARD_LEAN) };
+    },
+    travelY: Math.max(drawerCardsTop(), drawerSize().height / 2) + height / 2 + 0.08,
+    clipY: tray.floorTop,
+    reading: { x: 0, y: 0.95, z: 0.75, scale: 0.95 },
   };
 }

@@ -43,6 +43,8 @@ export interface PointerHandlers {
  */
 export function createSceneRuntime(mount: HTMLElement, viewDir: Vec3) {
   const { renderer, scene, camera, dispose: disposeStage } = createStage(mount);
+  // Los documentos se recortan contra la boca del cajón o de la carpeta (planos por material).
+  renderer.localClippingEnabled = true;
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const view = new THREE.Vector3(viewDir.x, viewDir.y, viewDir.z).normalize();
 
@@ -178,12 +180,25 @@ export function createSceneRuntime(mount: HTMLElement, viewDir: Vec3) {
   let downAt: { x: number; y: number; t: number; id: number; hit: THREE.Object3D | null } | null = null;
   let dragging = false;
 
+  function isDrawn(object: THREE.Object3D): boolean {
+    for (let node: THREE.Object3D | null = object; node; node = node.parent) if (!node.visible) return false;
+    return true;
+  }
+  function isClippedAt(object: THREE.Object3D, point: THREE.Vector3): boolean {
+    if (!(object instanceof THREE.Mesh)) return false;
+    const materials: THREE.Material[] = Array.isArray(object.material) ? object.material : [object.material];
+    return materials.some((material) => material.clippingPlanes?.some((plane) => plane.distanceToPoint(point) < 0));
+  }
+
   function pick(event: PointerEvent): THREE.Object3D | null {
     if (!handlers) return null;
     const rect = canvas.getBoundingClientRect();
     ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
-    return raycaster.intersectObjects(handlers.targets(), true)[0]?.object ?? null;
+    // Solo lo que se ve: ni objetos ocultos ni la parte recortada de un documento.
+    const hits = raycaster.intersectObjects(handlers.targets(), true).filter((hit) => isDrawn(hit.object) && !isClippedAt(hit.object, hit.point));
+    // Un documento gana aunque lo tape el frente translúcido del cajón.
+    return (hits.find((hit) => hit.object.userData.documentId) ?? hits[0])?.object ?? null;
   }
 
   function onPointerMove(event: PointerEvent) {
