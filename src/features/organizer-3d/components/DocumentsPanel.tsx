@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { KIND_LABELS, type EnvelopeDocument } from "../domain/document";
 import { describeFilter, EMPTY_FILTER, quickFilters, weekStartOf, type DateFilter, type DocumentFilter } from "../domain/documentFilter";
-import { parseLocalDate, toLocalIsoDate } from "../domain/localDate";
+import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
 import type { Stage } from "../domain/organizerView";
 import type { EnvelopeItem } from "../mocks/envelopes.mock";
 import { DOCUMENT } from "../scene/layout";

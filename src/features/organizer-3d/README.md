@@ -15,7 +15,6 @@ mocks/documents.mock.ts        Movimientos ficticios de cada sobre (única fuent
 domain/organizerView.ts        Máquina de estados visual: closed → open → focused ⇄ extracted ⇄ browsing ⇄ reading
 domain/document.ts             Documento = movimiento; actividad derivada (movimientos, último)
 domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, texto) y la frase que los describe
-domain/localDate.ts            Fechas "YYYY-MM-DD" locales (sin corrimiento UTC)
 domain/transfer.ts             Mover dinero: validar monto/saldo, aplicar, movimientos que deja
 domain/envelopeStyle.ts        Editar sobre: paleta, iconos, esquema (nombre único) y tono del papel
 domain/gestures.ts             Gestos: toque vs. deslizamiento y qué hace cada uno según el estado

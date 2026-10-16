@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { KIND_LABELS, type DocumentKind, type EnvelopeDocument } from "../domain/document";
-import { parseLocalDate } from "../domain/localDate";
+import { parseLocalDate } from "@/utils/localDate";
 import { DOCUMENT } from "./layout";
 
 const WIDTH = 512;

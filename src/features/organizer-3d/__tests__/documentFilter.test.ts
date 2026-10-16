@@ -1,6 +1,6 @@
 import { sortByRecent, summarizeActivity, type EnvelopeDocument } from "../domain/document";
 import { describeFilter, EMPTY_FILTER, filterDocuments, isEmptyFilter, normalizeText, quickFilters, weekStartOf, type DocumentFilter } from "../domain/documentFilter";
-import { parseLocalDate, toLocalIsoDate } from "../domain/localDate";
+import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
 import { documentsMock, documentsOf } from "../mocks/documents.mock";
 import { envelopesMock } from "../mocks/envelopes.mock";
 

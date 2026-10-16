@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { sortByRecent, summarizeActivity, type EnvelopeDocument } from "../domain/document";
 import { toneFor, type EnvelopeStyle } from "../domain/envelopeStyle";
-import { toLocalIsoDate } from "../domain/localDate";
+import { toLocalIsoDate } from "@/utils/localDate";
 import { applyTransfer, transferDocuments, type Balances, type Transfer } from "../domain/transfer";
 import { documentsOf } from "../mocks/documents.mock";
 import { envelopesMock, type EnvelopeId, type EnvelopeItem } from "../mocks/envelopes.mock";

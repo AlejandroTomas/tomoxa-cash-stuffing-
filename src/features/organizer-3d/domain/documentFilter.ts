@@ -1,7 +1,7 @@
 import { addDays, format, startOfMonth, startOfWeek, subWeeks } from "date-fns";
 import { es } from "date-fns/locale";
 import { sortByRecent, type EnvelopeDocument } from "./document";
-import { parseLocalDate, toLocalIsoDate } from "./localDate";
+import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
 
 /** Qué fechas se buscan dentro del sobre. Fechas siempre "YYYY-MM-DD" locales. */
 export type DateFilter =

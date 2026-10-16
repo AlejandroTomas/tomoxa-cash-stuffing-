@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { EnvelopeActivity } from "../domain/document";
-import { parseLocalDate } from "../domain/localDate";
+import { parseLocalDate } from "@/utils/localDate";
 import type { EnvelopeItem } from "../mocks/envelopes.mock";
 import type { Stage } from "../domain/organizerView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
