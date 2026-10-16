@@ -19,6 +19,8 @@ import type { EnvelopeDocument } from "../domain/document";
 import type { EnvelopeItem } from "../domain/envelopeView";
 import { swipeHint } from "../domain/gestures";
 import type { OrganizerView } from "../domain/organizerView";
+import { styleInfo, type OrganizerStyleId } from "../domain/organizerStyle";
+import { OrganizerStyleSelector, STYLE_ICONS } from "./OrganizerStyleSelector";
 import { cn } from "@/lib/utils";
 import { DocumentsPanel } from "./DocumentsPanel";
 import { EnvelopeDetailCard, formatAmount, glass } from "./EnvelopeDetailCard";
@@ -35,10 +37,11 @@ const OrganizerCanvas = dynamic(() => import("./OrganizerCanvas"), {
   loading: () => <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Preparando tu carpeta…</div>,
 });
 
-function announce(view: OrganizerView, envelopes: readonly EnvelopeItem[]): string {
+function announce(view: OrganizerView, envelopes: readonly EnvelopeItem[], style: OrganizerStyleId): string {
   const name = envelopes.find((item) => item.id === view.activeId)?.name ?? "";
-  if (view.stage === "closed") return "Carpeta cerrada.";
-  if (view.stage === "open") return "Carpeta abierta. Elige un sobre.";
+  const { label } = styleInfo(style);
+  if (view.stage === "closed") return style === "binder" ? "Carpeta cerrada." : `${label}: vista general.`;
+  if (view.stage === "open") return style === "binder" ? "Carpeta abierta. Elige un sobre." : `${label}. Elige un sobre.`;
   if (view.stage === "focused") return `Sobre ${name} seleccionado.`;
   if (view.stage === "browsing") return `Sobre ${name} abierto. Elige un documento.`;
   if (view.stage === "reading") return "Documento fuera del sobre.";
@@ -66,9 +69,12 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, envelopes, budgets, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+  const { view, selectedId, envelopes, budgets, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, style, changeStyle, canvas } =
     useOrganizerController();
   const reduceMotion = useReducedMotion();
+  // Antes de leer la preferencia del navegador se muestra la carpeta (no se monta ninguna escena).
+  const shownStyle: OrganizerStyleId = style ?? "binder";
+  const PillIcon = STYLE_ICONS[shownStyle];
   const sceneRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -168,12 +174,12 @@ export function OrganizerExperience() {
     <main className={`${handwriting.variable} relative isolate min-h-dvh overflow-x-clip lg:h-dvh lg:min-h-[720px] lg:overflow-hidden`}>
       <OrganizerBackdrop />
       <div ref={navRef} className="relative z-20 lg:absolute lg:inset-x-[3%] lg:top-[2.4%]">
-        <OrganizerNav onAccounts={() => setDialog("accounts")} alert={alert} />
+        <OrganizerNav onAccounts={() => setDialog("accounts")} alert={alert} center={<OrganizerStyleSelector value={shownStyle} onChange={changeStyle} variant="inline" />} />
       </div>
 
       <section
         ref={sceneRef}
-        aria-label="Carpeta 3D"
+        aria-label={`${styleInfo(shownStyle).label} 3D`}
         aria-describedby="organizer-help"
         className="relative h-[58svh] min-h-[380px] lg:absolute lg:inset-0 lg:h-auto lg:min-h-0"
       >
@@ -184,7 +190,7 @@ export function OrganizerExperience() {
             <p className="text-xs text-muted-foreground">{unavailable} Usa los sobres de abajo para explorar.</p>
           </div>
         ) : (
-          <OrganizerCanvas {...canvas} />
+          canvas.style && <OrganizerCanvas key={canvas.style} {...canvas} style={canvas.style} />
         )}
         <button
           ref={pillRef}
@@ -193,10 +199,15 @@ export function OrganizerExperience() {
           onClick={() => void toggleBinder()}
           className="absolute bottom-4 left-4 z-10 flex h-14 items-center gap-4 rounded-full border border-card/70 bg-card/45 pr-5 pl-6 text-[0.95rem] font-medium text-foreground shadow-lg shadow-foreground/5 outline-none backdrop-blur-xl transition-colors hover:bg-card/65 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-70 lg:bottom-[11%] lg:left-[3.7%] lg:h-[5.5rem] lg:gap-6 lg:pr-8 lg:pl-9 lg:text-lg"
         >
-          <BookOpen className="size-6 lg:size-7" strokeWidth={1.6} aria-hidden="true" />
-          {view.stage === "closed" ? "Abrir carpeta" : "Cerrar carpeta"}
+          <PillIcon className="size-6 lg:size-7" strokeWidth={1.6} aria-hidden="true" />
+          {view.stage === "closed" ? styleInfo(shownStyle).openLabel : styleInfo(shownStyle).closeLabel}
           <ChevronRight className="size-5" aria-hidden="true" />
         </button>
+        <OrganizerStyleSelector
+          value={shownStyle}
+          onChange={changeStyle}
+          className="absolute right-4 bottom-4 z-10 lg:hidden"
+        />
         {!unavailable && (
           // Pista de gestos solo en pantallas táctiles.
           <p aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-2 hidden justify-center pointer-coarse:flex">
@@ -207,7 +218,7 @@ export function OrganizerExperience() {
           Representación visual de la carpeta. Usa los botones de los sobres o el teclado: flechas para cambiar de sobre y Escape para regresar. En pantallas táctiles también puedes deslizar.
         </p>
         <p className="sr-only" aria-live="polite">
-          {announce(view, envelopes)}
+          {announce(view, envelopes, shownStyle)}
         </p>
       </section>
 

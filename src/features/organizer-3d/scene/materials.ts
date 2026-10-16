@@ -12,11 +12,15 @@ export interface MaterialKit {
   lining: THREE.MeshStandardMaterial;
   stitch: THREE.MeshStandardMaterial;
   metal: THREE.MeshStandardMaterial;
+  /** Metal champán / oro rosa más claro (cantos de la cajonera, placa del archivador). */
+  champagne: THREE.MeshStandardMaterial;
   chrome: THREE.MeshStandardMaterial;
   zipperTeeth: THREE.MeshStandardMaterial;
   shadowCatcher: THREE.ShadowMaterial;
   contactShadow: THREE.MeshBasicMaterial;
   paper: (tone: string) => THREE.MeshStandardMaterial;
+  /** Cuero sintético de un color (mismo grano que la carpeta). */
+  leatherTint: (color: string, lighten?: number) => THREE.MeshStandardMaterial;
   plastic: (color: string, options: PlasticOptions) => THREE.MeshPhysicalMaterial;
   track: <T extends THREE.Material | THREE.Texture>(resource: T) => T;
   /** Libera recursos de un objeto que se quita antes del final (p. ej. un sobre archivado). */
@@ -86,6 +90,7 @@ export function createMaterialKit(maxAnisotropy: number, manager?: THREE.Loading
   }));
   const stitch = track(new THREE.MeshStandardMaterial({ color: "#fbeee6", roughness: 0.85 }));
   const metal = track(new THREE.MeshStandardMaterial({ color: "#e2c9a6", metalness: 1, roughness: 0.24, envMapIntensity: 1.15 }));
+  const champagne = track(new THREE.MeshStandardMaterial({ color: "#f0cdb4", metalness: 0.85, roughness: 0.3, envMapIntensity: 1.7 }));
   const chrome = track(new THREE.MeshStandardMaterial({ color: "#d9d6d4", metalness: 1, roughness: 0.2, envMapIntensity: 1.1 }));
   const zipperTeeth = track(new THREE.MeshStandardMaterial({ color: "#f3f1ee", metalness: 0.2, roughness: 0.35 }));
   const shadowCatcher = track(new THREE.ShadowMaterial({ color: "#3d2422", opacity: 0.13, depthWrite: false }));
@@ -105,11 +110,21 @@ export function createMaterialKit(maxAnisotropy: number, manager?: THREE.Loading
     lining,
     stitch,
     metal,
+    champagne,
     chrome,
     zipperTeeth,
     shadowCatcher,
     contactShadow,
     track,
+    leatherTint: (color, lighten = 0) =>
+      track(new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color).lerp(white, lighten),
+        normalMap: leatherNormal,
+        normalScale: new THREE.Vector2(0.55, 0.55),
+        roughnessMap: leatherRoughness,
+        roughness: 0.78,
+        envMapIntensity: 0.6,
+      })),
     paper: (tone) =>
       track(new THREE.MeshStandardMaterial({ color: tone, map: paperColor, roughness: 0.95, envMapIntensity: 0.3 })),
     plastic: (color, { opacity, roughness = 0.3, clearcoat = 0.7, lighten = 0, opaque = false }) =>

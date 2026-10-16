@@ -1,7 +1,9 @@
 # organizer-3d — Aurora Organizer
 
-Página de inicio (`/`; `/organizer` redirige ahí): carpeta de cuero sintético en
-3D con sobres plásticos extraíbles (hasta 8) y una interfaz de vidrio encima.
+Página de inicio (`/`; `/organizer` redirige ahí): un organizador 3D con sobres
+extraíbles (hasta 8) y una interfaz de vidrio encima. Tres estilos, con los mismos
+sobres y datos: **carpeta** de cuero con sobres plásticos, **cajonera** de cajones
+translúcidos y **archivador** de acrílico con carpetas verticales.
 Los saldos, movimientos y sobres vienen del **libro de movimientos**
 (`features/ledger`), guardado en el dispositivo. El organizador solo los muestra y
 anima; las acciones ("Mover dinero", crear/editar/archivar sobres) pasan por los
@@ -17,6 +19,7 @@ domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, text
 domain/transfer.ts             Formulario "Mover dinero": esquema y lectura del monto (las reglas son del libro)
 domain/envelopeStyle.ts        Editar sobre: paleta, iconos, esquema (nombre único) y tono del papel
 domain/gestures.ts             Gestos: toque vs. deslizamiento y qué hace cada uno según el estado
+domain/organizerStyle.ts       Estilos (carpeta, cajonera, archivador): nombres, textos del botón, preferencia guardada
 errors/organizer-errors.ts     WebGLUnavailableError (caso esperado: se reporta como aviso)
 components/
   OrganizerExperience.tsx      Composición a pantalla completa y medición de la "zona libre"
@@ -30,9 +33,17 @@ components/
   EditEnvelopeDialog.tsx       Crear o editar un sobre (al editar, vista previa en vivo en la carpeta)
   useLedgerData.ts             El libro visto por el organizador (selectores y thunks de `ledger`)
   OrganizerBackdrop.tsx/.css   Fondo de habitación desenfocada (CSS; foto opcional)
-  OrganizerCanvas.tsx          Monta/desmonta la escena (solo cliente, next/dynamic ssr:false)
+  OrganizerCanvas.tsx          Monta/desmonta la escena del estilo (solo cliente, next/dynamic ssr:false)
+  OrganizerStyleSelector.tsx   Selector de estilo: en la barra (escritorio) o sobre la escena (móvil)
+  useOrganizerStyle.ts         Estilo elegido (localStorage, con respaldo en memoria; null al hidratar)
 scene/                         Three.js directo, sin React
-  organizerScene.ts            API imperativa (open/close/focus/extract/returnEnvelope/clearFocus/setSafeArea) y timelines GSAP
+  contract.ts                  Contrato común de las escenas (OrganizerSceneApi, SceneIntent, SafeArea)
+  createScene.ts               Estilo → escena (la única que sabe cuáles existen)
+  organizerScene.ts            Carpeta: implementación del contrato y timelines GSAP
+  runtime.ts                   Base de los estilos de ranuras: renderer, bucle, cámara, gestos, timelines
+  slotModel.ts · slotScene.ts  Contrato de un modelo de ranuras y la escena genérica que lo anima
+  cabinet/                     Cajonera: cabinetLayout (medidas y poses, puro) · cabinetModel (mallas)
+  files/                       Archivador: filesLayout (medidas y poses, puro) · filesModel (mallas)
   stage.ts                     Renderer, luces, entorno procedural (RoomEnvironment), sombras
   binder.ts · envelope.ts      Carpeta (lomo, anillas, correa, banda, hojas) y sobres (bolsa esmerilada, pestañas)
   materials.ts · labels.ts     Materiales compartidos (un dueño, se liberan juntos) y etiquetas en canvas
@@ -65,6 +76,39 @@ scene/                         Three.js directo, sin React
   ambos temas. El resto usa tokens; el coral de marca es `--primary` en `globals.css`.
 - `prefers-reduced-motion`: duraciones en 0, sin flotación ni paralaje. Sin WebGL: aviso y
   la fila de sobres + tarjeta siguen funcionando.
+
+## Estilos: carpeta, cajonera y archivador
+
+Todos cumplen `OrganizerSceneApi` (`scene/contract.ts`); el controlador, la máquina de
+estados y la interfaz no saben cuál está montado. Seleccionar, extraer, regresar y
+reiniciar son `focus`, `extract`, `returnEnvelope` y `clearFocus`.
+
+- **Carpeta** (`organizerScene.ts`): la original, sin cambios de comportamiento.
+- **Cajonera** y **archivador** usan `slotScene`: un cuerpo fijo y una pieza móvil por
+  sobre. El modelo (`SlotModel`) da geometría y poses (`rest`, `focus`, `exitPath`,
+  encuadres); la escena genérica anima entre poses con timelines de GSAP. Regresar
+  recorre `exitPath` al revés, así la pieza vuelve por donde salió sin atravesar nada
+  y termina exactamente en su pose. Al elegir otra pieza, la anterior vuelve antes de
+  que salga la nueva. "Cerrar" en estos estilos es la vista general (cámara más lejos).
+  - Cajonera: 2 columnas, filas según los sobres (3 para 6, 4 para 7–8). Hover: el
+    cajón asoma; elegido: sale un tramo; extraído: sale completo y viene al frente,
+    inclinado para ver su interior. Al mover dinero, los cajones se abren y las fichas
+    caen dentro.
+  - Archivador: carpetas en fila sobre placa champán y bandeja de acrílico. Hover:
+    sube un poco; elegida: sube sin salir del compartimento; extraída: sube hasta
+    librar las paredes, sale al frente y viene al centro girando hacia la cámara.
+- **Documentos en 3D** (abanico de tickets) son de la carpeta. En los otros estilos
+  "Abrir sobre" muestra el panel de documentos igual, sin abanico.
+- **Cambiar de estilo** (selector en la barra o sobre la escena en móvil): el lienzo se
+  desvanece (220 ms; nada con reduced motion), la escena anterior se libera (timelines,
+  geometrías, materiales, texturas y contexto WebGL con `forceContextLoss`) y la nueva
+  se monta en el mismo estado visual (`syncScene`): mismo sobre elegido, extraído o no.
+  Siempre hay un solo canvas y un solo bucle. Si se cambia a media animación, la
+  promesa de la escena anterior se resuelve al liberarla y no queda nada bloqueado. No
+  toca el libro: cambiar de estilo no crea movimientos ni cambia saldos.
+- **Un estilo nuevo** = otro `SlotModel` (geometría + poses) y un caso en `createScene.ts`.
+- **Calidad adaptativa** en los estilos de ranuras: primero baja el pixel ratio y, ya en
+  1, apaga las sombras dinámicas.
 
 ## Abrir el sobre y buscar documentos
 
@@ -125,4 +169,10 @@ hecho solo con CSS (degradados, bokeh, planta y bowl). Para cambiarla: misma rut
 
 `public/assets/organizer/textures/`: `leather_{normal,roughness}.png`,
 `plastic_normal.png`, `paper_basecolor.png` (512×512, originales del starter
-de Aurora Organizer).
+de Aurora Organizer). La cajonera y el archivador reutilizan estas mismas
+texturas (grano del cuero, micro-relieve del plástico, papel) y materiales
+procedurales (acrílico, laca, metal champán); etiquetas en canvas.
+
+Assets adicionales que **mejorarían** el acabado (ninguno es necesario para que
+funcione): un mapa de normales de plástico esmerilado más fino para los cajones y
+un HDRI pequeño de estudio (≤ 1 MB) para reflejos más ricos en el acrílico y el metal.

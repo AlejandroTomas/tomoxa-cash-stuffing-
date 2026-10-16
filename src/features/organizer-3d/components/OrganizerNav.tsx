@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, Landmark, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -16,10 +17,12 @@ interface OrganizerNavProps {
   onAccounts?: () => void;
   /** Aviso corto junto a "Cuentas" (deuda sin respaldo, sobres sobregirados). */
   alert?: string | null;
+  /** Contenido al centro de la barra en escritorio (el selector de organizador). */
+  center?: ReactNode;
 }
 
 /** Barra superior de vidrio: marca, secciones, cuentas, tema y perfil (demo). */
-export function OrganizerNav({ onAccounts, alert }: OrganizerNavProps) {
+export function OrganizerNav({ onAccounts, alert, center }: OrganizerNavProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const mounted = useIsClient();
   const dark = mounted && resolvedTheme === "dark";
@@ -51,6 +54,7 @@ export function OrganizerNav({ onAccounts, alert }: OrganizerNavProps) {
             </li>
           ))}
         </ul>
+        {center && <div className="hidden lg:ml-auto lg:flex">{center}</div>}
         <div className="ml-auto flex items-center gap-1 lg:gap-3">
           {onAccounts && (
             <button

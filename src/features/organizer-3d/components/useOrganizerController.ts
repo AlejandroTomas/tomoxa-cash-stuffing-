@@ -11,7 +11,12 @@ import { neighborEnvelope, type EnvelopeId } from "../domain/envelopeView";
 import { swipeCommand } from "../domain/gestures";
 import { backAction, initialView, isEnvelopeOut, transitionView, type OrganizerAction, type OrganizerView } from "../domain/organizerView";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "../scene/organizerScene";
+import type { OrganizerStyleId } from "../domain/organizerStyle";
 import { useLedgerData } from "./useLedgerData";
+import { useOrganizerStyle } from "./useOrganizerStyle";
+
+/** Cuánto dura el desvanecido del lienzo al cambiar de estilo (ms). */
+const STYLE_FADE_MS = 220;
 
 /** Sobre que se muestra en la tarjeta de detalle al entrar (si existe). */
 export const DEFAULT_ENVELOPE: EnvelopeId = "card";
@@ -27,9 +32,16 @@ export function useOrganizerController() {
   const [view, setView] = useState<OrganizerView>(initialView);
   const [chosenId, setSelectedId] = useState<EnvelopeId>(DEFAULT_ENVELOPE);
   const [busy, setBusy] = useState(false);
-  const [sceneReady, setSceneReady] = useState(false);
+  // La escena montada (no solo un booleano: al cambiar de estilo se reemplaza en un mismo render y los efectos deben volver a correr).
+  const [sceneApi, setSceneApi] = useState<OrganizerSceneApi | null>(null);
+  const sceneReady = sceneApi !== null;
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const sceneRef = useRef<OrganizerSceneApi | null>(null);
+  const { style, setStyle } = useOrganizerStyle();
+  // Mientras se cambia de estilo, el lienzo se desvanece y la escena anterior se libera.
+  const [fading, setFading] = useState(false);
+  const fadeTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(fadeTimer.current), []);
   const viewRef = useRef<OrganizerView>(initialView);
   const busyRef = useRef(false);
 
@@ -358,13 +370,36 @@ export function useOrganizerController() {
   const onReady = useCallback((api: OrganizerSceneApi | null) => {
     sceneRef.current = api;
     if (api && safeAreaRef.current) api.setSafeArea(safeAreaRef.current);
-    setSceneReady(Boolean(api));
+    setSceneApi(api);
+    if (api) setFading(false);
   }, []);
+
+  /**
+   * Cambia de organizador sin recargar: el lienzo se desvanece, la escena
+   * anterior se libera (timelines, geometrías, contexto WebGL) y la nueva se
+   * monta en el mismo estado (mismo sobre elegido, extraído o no). No toca datos.
+   */
+  const changeStyle = useCallback(
+    (next: OrganizerStyleId) => {
+      if (next === style) return;
+      window.clearTimeout(fadeTimer.current);
+      // Si un estilo no pudo montarse, el siguiente lo vuelve a intentar.
+      setUnavailable(null);
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+      if (reduce) {
+        setStyle(next);
+        return;
+      }
+      setFading(true);
+      fadeTimer.current = window.setTimeout(() => setStyle(next), STYLE_FADE_MS);
+    },
+    [style, setStyle],
+  );
 
   // Los sobres del libro llegan a la escena (y la reacomodan si cambian).
   useEffect(() => {
     if (sceneReady && ledger.loaded) void sceneRef.current?.setEnvelopes(envelopes);
-  }, [sceneReady, ledger.loaded, envelopes]);
+  }, [sceneApi, sceneReady, ledger.loaded, envelopes]);
 
   // Intro: con la escena lista y el libro cargado, la carpeta se abre sola. Se
   // difiere un tick: en desarrollo StrictMode monta la escena dos veces y solo la
@@ -382,7 +417,7 @@ export function useOrganizerController() {
       else void syncScene(api, stage, activeId);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [sceneReady, ledger.loaded, toggleBinder, syncScene]);
+  }, [sceneApi, sceneReady, ledger.loaded, toggleBinder, syncScene]);
 
   // Teclado: flechas cambian de sobre, Escape retrocede. No interfiere con campos ni diálogos.
   useEffect(() => {
@@ -441,7 +476,11 @@ export function useOrganizerController() {
     step,
     back,
     setSafeArea,
+    style,
+    changeStyle,
     canvas: {
+      style,
+      fading,
       onReady,
       onIntent,
       onUnavailable: (message: string) => {

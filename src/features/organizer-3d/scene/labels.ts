@@ -32,19 +32,21 @@ export const LABEL_ASPECT = 5;
 const WIDTH = 1000;
 const HEIGHT = WIDTH / LABEL_ASPECT;
 
+/** "row": icono y nombre en línea (sobres, cajones). "stacked": icono arriba y nombre abajo (carpetas verticales). */
+export type LabelLayout = "row" | "stacked";
+/** Proporción de la etiqueta apilada. */
+export const STACKED_LABEL_ASPECT = 1.25;
+const STACKED_HEIGHT = Math.round(WIDTH / STACKED_LABEL_ASPECT);
+
 function fontFamily(): string {
   const family = typeof document !== "undefined" ? getComputedStyle(document.body).fontFamily : "";
   return family || "system-ui, sans-serif";
 }
 
-function draw(ctx: CanvasRenderingContext2D, item: EnvelopeItem) {
-  ctx.clearRect(0, 0, WIDTH, HEIGHT);
-  // Impreso directo sobre el plástico esmerilado: icono de trazo y nombre.
-  const box = HEIGHT * 0.66;
-  const top = (HEIGHT - box) / 2;
+function drawIcon(ctx: CanvasRenderingContext2D, item: EnvelopeItem, x: number, y: number, box: number) {
   ctx.save();
   const scale = box / 24;
-  ctx.translate(18, top);
+  ctx.translate(x, y);
   ctx.scale(scale, scale);
   ctx.strokeStyle = shade(item.color, -0.42);
   ctx.lineWidth = 1.7;
@@ -52,11 +54,28 @@ function draw(ctx: CanvasRenderingContext2D, item: EnvelopeItem) {
   ctx.lineJoin = "round";
   ICON_PATHS[item.icon].forEach((d) => ctx.stroke(new Path2D(d)));
   ctx.restore();
+}
 
+function draw(ctx: CanvasRenderingContext2D, item: EnvelopeItem, layout: LabelLayout) {
+  const { width, height } = ctx.canvas;
+  ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#353a45";
-  ctx.font = `500 92px ${fontFamily()}`;
   ctx.textBaseline = "middle";
-  ctx.fillText(item.name, 60 + box * 1.1, HEIGHT / 2 + 4, WIDTH - box - 110);
+  if (layout === "stacked") {
+    // Grabado al frente de la carpeta: icono grande al centro y el nombre debajo.
+    const box = height * 0.4;
+    drawIcon(ctx, item, (width - box) / 2, height * 0.1, box);
+    ctx.font = `500 128px ${fontFamily()}`;
+    ctx.textAlign = "center";
+    ctx.fillText(item.name, width / 2, height * 0.74, width - 60);
+    return;
+  }
+  // Impreso directo sobre el plástico esmerilado: icono de trazo y nombre.
+  const box = height * 0.66;
+  drawIcon(ctx, item, 18, (height - box) / 2, box);
+  ctx.font = `500 92px ${fontFamily()}`;
+  ctx.textAlign = "left";
+  ctx.fillText(item.name, 60 + box * 1.1, height / 2 + 4, width - box - 110);
 }
 
 /** Oscurece (negativo) o aclara (positivo) un color hex. */
@@ -69,18 +88,19 @@ function shade(hex: string, amount: number): string {
  * Textura de la etiqueta. Se redibuja cuando terminan de cargar las fuentes
  * para usar la tipografía de la app (Geist) en lugar de la de respaldo.
  */
-export function createLabelTexture(item: EnvelopeItem, maxAnisotropy: number): THREE.CanvasTexture {
+export function createLabelTexture(item: EnvelopeItem, maxAnisotropy: number, layout: LabelLayout = "row"): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
-  canvas.height = HEIGHT;
+  canvas.height = layout === "stacked" ? STACKED_HEIGHT : HEIGHT;
   const ctx = canvas.getContext("2d");
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = Math.min(8, maxAnisotropy);
+  texture.userData.layout = layout;
   if (!ctx) return texture;
-  draw(ctx, item);
+  draw(ctx, item, layout);
   document.fonts?.ready.then(() => {
-    draw(ctx, item);
+    draw(ctx, item, layout);
     texture.needsUpdate = true;
   });
   return texture;
@@ -90,6 +110,6 @@ export function createLabelTexture(item: EnvelopeItem, maxAnisotropy: number): T
 export function redrawLabel(texture: THREE.CanvasTexture, item: EnvelopeItem) {
   const ctx = (texture.image as HTMLCanvasElement).getContext("2d");
   if (!ctx) return;
-  draw(ctx, item);
+  draw(ctx, item, (texture.userData.layout as LabelLayout | undefined) ?? "row");
   texture.needsUpdate = true;
 }
