@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, RINGS, slotPose } from "../scene/layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, RINGS, slotPose } from "../scene/layout";
 import { envelopesMock } from "../mocks/envelopes.mock";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
@@ -132,4 +132,17 @@ describe("abanico de documentos", () => {
   });
 
   it("uno solo va centrado y derecho", () => expect(fanPose(0, 1)).toMatchObject({ x: 0, rz: 0 }));
+});
+
+describe("salir y volver al bolsillo sin atravesar", () => {
+  it("al subir POCKET_CLEARANCE, el borde inferior libra el borde superior del sobre de enfrente", () => {
+    for (let i = 0; i < envelopesMock.length - 1; i++) {
+      const own = slotPose(i, true);
+      const front = slotPose(i + 1, true);
+      const half = ENVELOPE.height / 2;
+      const ownBottom = own.y + POCKET_CLEARANCE * Math.cos(own.rx) - half * Math.cos(own.rx);
+      const frontTop = front.y + half * Math.cos(front.rx);
+      expect(ownBottom).toBeGreaterThan(frontTop + 0.2);
+    }
+  });
 });

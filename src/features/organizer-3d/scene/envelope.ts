@@ -76,7 +76,7 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
   };
   const deep = `#${new THREE.Color(item.color).lerp(new THREE.Color("#3a3340"), 0.18).getHexString()}`;
 
-  add(geo.back, kit.plastic(item.color, { opacity: 0.9, roughness: 0.5, clearcoat: 0.35, lighten: 0 }), [0, 0, -0.045], 0, true);
+  add(geo.back, kit.plastic(item.color, { opacity: 1, roughness: 0.55, clearcoat: 0.35, lighten: 0.16, opaque: true }), [0, 0, -0.045], 0, true);
   // Funda interior desplazada: la doble silueta de las bolsas de la referencia.
   add(geo.sleeve, kit.plastic(item.color, { opacity: 0.5, roughness: 0.5, clearcoat: 0.3, lighten: 0.2 }), [0.1, 0.07, -0.022], 1);
 
@@ -85,21 +85,21 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
   add(geo.note, paper, [0.15, -0.3, -0.012], 1).rotation.z = 0.03;
 
   // Cara frontal acolchada y esmerilada: deja ver el contenido difuso.
-  add(geo.front, kit.plastic(item.color, { opacity: 0.74, roughness: 0.5, clearcoat: 0.6, lighten: 0.04 }), [0, -0.06, 0.012], 2);
-  add(geo.weld, kit.plastic(item.color, { opacity: 0.88, roughness: 0.4, clearcoat: 0.5, lighten: 0.3 }), [0, 0, 0.03], 3);
+  add(geo.front, kit.plastic(item.color, { opacity: 0.62, roughness: 0.5, clearcoat: 0.6, lighten: 0.06 }), [0, -0.06, 0.012], 2);
+  add(geo.weld, kit.plastic(item.color, { opacity: 1, roughness: 0.4, clearcoat: 0.5, lighten: 0.3, opaque: true }), [0, 0, 0.03], 3);
   // Labio superior con bisagra en su borde inferior: la "boca" del sobre.
   const mouth = new THREE.Group();
   mouth.position.set(0, TOP - 0.13, 0.03);
   hover.add(mouth);
-  const lip = new THREE.Mesh(geo.lip, kit.plastic(item.color, { opacity: 0.9, roughness: 0.35, clearcoat: 0.8, lighten: 0.5 }));
+  const lip = new THREE.Mesh(geo.lip, kit.plastic(item.color, { opacity: 1, roughness: 0.35, clearcoat: 0.8, lighten: 0.5, opaque: true }));
   lip.position.y = 0.06;
   lip.receiveShadow = true;
   mouth.add(lip);
   layered.push([lip, 3]);
 
   // Pestañas: una opaca en el borde izquierdo y otra translúcida asomando a la derecha.
-  add(geo.leftTab, kit.plastic(deep, { opacity: 0.96, roughness: 0.45, clearcoat: 0.4 }), [-EW / 2 + 0.02, LABEL_Y - 0.16, 0.02], 3);
-  if (index >= 2) add(geo.rightTab, kit.plastic(item.color, { opacity: 0.8, roughness: 0.5, clearcoat: 0.4, lighten: 0.1 }), [EW / 2 + 0.08, TOP - 0.42, -0.03], 0);
+  add(geo.leftTab, kit.plastic(deep, { opacity: 1, roughness: 0.45, clearcoat: 0.4, opaque: true }), [-EW / 2 + 0.02, LABEL_Y - 0.16, 0.02], 3);
+  if (index >= 2) add(geo.rightTab, kit.plastic(item.color, { opacity: 1, roughness: 0.5, clearcoat: 0.4, lighten: 0.2, opaque: true }), [EW / 2 + 0.08, TOP - 0.42, -0.03], 0);
 
   // Etiqueta impresa sobre el plástico.
   const label = add(

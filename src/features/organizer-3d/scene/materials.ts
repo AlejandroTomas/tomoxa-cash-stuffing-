@@ -28,6 +28,11 @@ export interface PlasticOptions {
   clearcoat?: number;
   /** Mezcla con blanco (0 = color puro). Aclara películas delgadas. */
   lighten?: number;
+  /**
+   * Plástico esmerilado opaco: no deja ver lo que hay detrás ni entra en el
+   * orden de transparencias (evita que se "transparente" la pila de sobres).
+   */
+  opaque?: boolean;
 }
 
 export function createMaterialKit(maxAnisotropy: number): MaterialKit {
@@ -105,11 +110,11 @@ export function createMaterialKit(maxAnisotropy: number): MaterialKit {
     track,
     paper: (tone) =>
       track(new THREE.MeshStandardMaterial({ color: tone, map: paperColor, roughness: 0.95, envMapIntensity: 0.3 })),
-    plastic: (color, { opacity, roughness = 0.3, clearcoat = 0.7, lighten = 0 }) =>
+    plastic: (color, { opacity, roughness = 0.3, clearcoat = 0.7, lighten = 0, opaque = false }) =>
       track(new THREE.MeshPhysicalMaterial({
         color: new THREE.Color(color).lerp(white, lighten),
-        transparent: true,
-        opacity,
+        transparent: !opaque,
+        opacity: opaque ? 1 : opacity,
         roughness,
         metalness: 0,
         clearcoat,

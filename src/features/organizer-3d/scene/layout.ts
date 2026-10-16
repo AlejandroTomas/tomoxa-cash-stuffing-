@@ -63,6 +63,13 @@ export function slotPose(index: number, fanned = false): SlotPose {
   return { x, y: y - half * (1 - Math.cos(rx)), z: z + half * Math.sin(rx), rx };
 }
 
+/**
+ * Cuánto sube un sobre (en su plano) para salir del bolsillo: su borde inferior
+ * debe quedar por encima del borde superior del sobre de enfrente, más holgura.
+ * Con menos, al ir al frente o al regresar atraviesa a los de enfrente.
+ */
+export const POCKET_CLEARANCE = ENVELOPE.height - ENVELOPE.stagger + 0.45;
+
 /** Distancia que asoma un sobre enfocado, a lo largo de su propio plano. */
 export const FOCUS_LIFT = 0.42;
 

@@ -48,6 +48,7 @@ export function OrganizerExperience() {
   const navRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
+  const tilesRef = useRef<HTMLDivElement>(null);
   const item = getEnvelope(selectedId);
 
   // La carpeta se encuadra en la parte del lienzo que no tapa la interfaz.
@@ -59,17 +60,19 @@ export function OrganizerExperience() {
       const nav = navRef.current?.getBoundingClientRect();
       const card = cardRef.current?.getBoundingClientRect();
       const pill = pillRef.current?.getBoundingClientRect();
+      const tiles = tilesRef.current?.getBoundingClientRect();
       const cardOver = Boolean(card && overlaps(s, card));
+      // Escritorio: la carpeta queda por encima de la fila de sobres. Móvil: por encima del botón.
+      const bottomEdge = cardOver ? (tiles && overlaps(s, tiles) ? tiles.top : s.bottom - 16) : (pill?.top ?? s.bottom - 16);
       setSafeArea({
         top: nav && overlaps(s, nav) ? nav.bottom - s.top + 8 : 8,
         right: card && cardOver ? s.right - card.left + 16 : 8,
-        // En escritorio la carpeta puede pasar detrás del botón; en móvil no.
-        bottom: pill && !cardOver ? s.bottom - pill.top + 8 : 16,
+        bottom: Math.max(16, s.bottom - bottomEdge + 12),
         left: 8,
       });
     };
     const observer = new ResizeObserver(measure);
-    [scene, navRef.current, cardRef.current].forEach((el) => el && observer.observe(el));
+    [scene, navRef.current, cardRef.current, tilesRef.current].forEach((el) => el && observer.observe(el));
     measure();
     return () => observer.disconnect();
   }, [setSafeArea]);
@@ -116,12 +119,9 @@ export function OrganizerExperience() {
       </section>
 
       <div className="relative z-10 flex flex-col gap-4 px-3 pb-6 lg:contents">
-        <EnvelopeTiles
-          selectedId={selectedId}
-          busy={busy}
-          onSelect={(id) => void selectEnvelope(id)}
-          className="lg:absolute lg:right-[1.6%] lg:bottom-[2.6%] lg:z-10 lg:w-[min(51%,1000px)]"
-        />
+        <div ref={tilesRef} className="lg:absolute lg:right-[1.6%] lg:bottom-[2.6%] lg:z-10 lg:w-[min(51%,1000px)]">
+          <EnvelopeTiles selectedId={selectedId} busy={busy} onSelect={(id) => void selectEnvelope(id)} />
+        </div>
         <div ref={cardRef} className="lg:absolute lg:top-[13%] lg:right-[2%] lg:z-10 lg:w-[min(27.5%,540px)] lg:min-w-[380px]">
           {view.stage === "browsing" || view.stage === "reading" ? (
             <div className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, cardHeight)}>

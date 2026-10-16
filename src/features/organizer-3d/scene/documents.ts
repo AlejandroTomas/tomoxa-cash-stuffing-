@@ -41,6 +41,8 @@ export function createDocumentStack(docs: readonly EnvelopeDocument[], maxAnisot
     mesh.receiveShadow = true;
     const pose = insidePose(order);
     mesh.position.set(pose.x, pose.y, pose.z);
+    // Guardado no se dibuja: el frente del sobre es translúcido y se notaría.
+    mesh.visible = false;
     mesh.traverse((object) => {
       object.userData.documentId = doc.id;
     });

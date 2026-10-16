@@ -7,7 +7,7 @@ import { fovFor, presentDepth, rigFor, subFov, type CameraRig, type Viewport } f
 import type { EnvelopeDocument } from "../domain/document";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, slotPose, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, slotPose, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 
@@ -48,8 +48,8 @@ type SceneStage = "closed" | "open" | "focused" | "extracted" | "browsing" | "re
 const VIEW_DIR = new THREE.Vector3(0, 0.08, 1).normalize();
 const STRAP_OPEN = Math.PI / 2 + 0.14;
 const STRAP_TAB_OPEN = Math.PI / 2 - 0.08;
-/** Cuánto sube el sobre para salir del bolsillo antes de venir al frente. */
-const LIFT = 1.2;
+/** Cuánto sube el sobre para salir del bolsillo antes de venir al frente (libra a los de enfrente). */
+const LIFT = POCKET_CLEARANCE;
 /** Pose de presentación del sobre extraído: compensa la inclinación de la carpeta para mirar a cámara. */
 const EXTRACTED = { rx: -BINDER.tilt.x * 0.88, ry: -BINDER.tilt.y * 0.7 - 0.06, rz: -BINDER.tilt.z * 0.8, scale: 1.06 };
 /** Z mínima del sobre presentado: por delante del sobre más cercano en abanico. */
@@ -169,13 +169,25 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     return { ...slot, y: slot.y + LIFT * Math.cos(slot.rx), z: slot.z + LIFT * Math.sin(slot.rx) + 0.05 };
   }
 
-  /** Camino de regreso: sube sobre su bolsillo, se endereza y entra deslizando. Devuelve cuándo termina. */
+  /**
+   * Camino de regreso sin atravesar a nadie: 1) sube a la altura de salida
+   * donde está, 2) retrocede hasta quedar sobre su bolsillo, 3) baja en su
+   * plano. Devuelve cuándo termina.
+   */
   function slideBack(tl: gsap.core.Timeline, part: EnvelopePart, at: number, end: SlotPose): number {
-    const travel = d(0.6);
-    toPose(tl, part, abovePocket(part.index), at, travel, "power2.inOut");
-    tl.call(() => restingLayers(), [], at + travel);
-    tl.to(part.group.position, { y: end.y, z: end.z, duration: d(0.45), ease: "power2.out" }, at + travel);
-    return at + travel + d(0.45);
+    const above = abovePocket(part.index);
+    const rise = d(0.3);
+    const back = d(0.55);
+    const down = d(0.45);
+    tl.to(part.group.position, { y: Math.max(above.y, part.group.position.y), duration: rise, ease: "power2.out" }, at);
+    tl.to(part.group.position, { x: above.x, z: above.z, duration: back, ease: "power2.inOut" }, at + rise * 0.6);
+    tl.to(part.group.position, { y: above.y, duration: back, ease: "power2.inOut" }, at + rise);
+    tl.to(part.group.rotation, { x: above.rx, y: 0, z: 0, duration: back, ease: "power2.inOut" }, at + rise * 0.6);
+    tl.to(part.group.scale, { x: 1, y: 1, z: 1, duration: back, ease: "power2.inOut" }, at + rise * 0.6);
+    const settle = at + rise * 0.6 + back;
+    tl.call(() => restingLayers(), [], settle);
+    tl.to(part.group.position, { y: end.y, z: end.z, duration: down, ease: "power2.out" }, settle);
+    return settle + down;
   }
 
   async function open() {
@@ -267,12 +279,14 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     part.setLayer(200);
     await play((tl) => {
       parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.45), true));
-      // 1) Sale del bolsillo hacia arriba. 2) Viene al frente, mirando a la cámara.
-      toPose(tl, part, abovePocket(part.index), 0, d(0.4), "power2.in");
+      // 1) Sale del bolsillo hacia arriba, en su plano, hasta librar a los de enfrente.
+      // 2) Viene al frente a esa altura. 3) Ya delante de todos, baja a su lugar mirando a la cámara.
+      toPose(tl, part, abovePocket(part.index), 0, d(0.45), "power2.inOut");
       const spot = extractedSpot();
-      tl.to(part.group.position, { x: spot.x, y: spot.y, z: spot.z, duration: d(0.8), ease: "power3.out" }, d(0.4));
-      tl.to(part.group.rotation, { x: EXTRACTED.rx, y: EXTRACTED.ry, z: EXTRACTED.rz, duration: d(0.85), ease: "power2.out" }, d(0.36));
-      tl.to(part.group.scale, { x: spot.scale, y: spot.scale, z: spot.scale, duration: d(0.8), ease: "power2.out" }, d(0.4));
+      tl.to(part.group.position, { x: spot.x, z: spot.z, duration: d(0.6), ease: "power2.out" }, d(0.42));
+      tl.to(part.group.position, { y: spot.y, duration: d(0.6), ease: "power3.out" }, d(0.72));
+      tl.to(part.group.rotation, { x: EXTRACTED.rx, y: EXTRACTED.ry, z: EXTRACTED.rz, duration: d(0.8), ease: "power2.out" }, d(0.5));
+      tl.to(part.group.scale, { x: spot.scale, y: spot.scale, z: spot.scale, duration: d(0.8), ease: "power2.out" }, d(0.5));
     });
   }
 
@@ -329,6 +343,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   }
 
   function toDocPose(tl: gsap.core.Timeline, mesh: THREE.Object3D, pose: DocumentPose, at: number, duration: number, ease = "power3.out", scale = 1) {
+    tl.call(() => {
+      mesh.visible = true;
+    }, [], at);
     tl.to(mesh.position, { x: pose.x, y: pose.y, z: pose.z, duration, ease }, at);
     tl.to(mesh.rotation, { z: pose.rz, duration, ease }, at);
     tl.to(mesh.scale, { x: scale, y: scale, z: scale, duration, ease }, at);
@@ -336,6 +353,14 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   /** Los que van en el abanico (pasan el filtro, hasta `maxFan`). */
   const fanIds = () => shown.filter((id) => stack?.items.has(id)).slice(0, DOCUMENT.maxFan);
+
+  /** Lleva un documento adentro del sobre y deja de dibujarlo al llegar. */
+  function stowDoc(tl: gsap.core.Timeline, mesh: THREE.Object3D, order: number, at: number) {
+    toDocPose(tl, mesh, insidePose(order), at, d(0.35), "power2.in");
+    tl.call(() => {
+      mesh.visible = false;
+    }, [], at + d(0.35));
+  }
 
   /** Abanico con los visibles; el resto, guardado. Respeta el documento que está fuera. */
   function arrange(tl: gsap.core.Timeline, at: number, stagger: number) {
@@ -346,7 +371,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       if (id === pickedId) return;
       const index = fan.indexOf(id);
       if (index >= 0) toDocPose(tl, item.mesh, fanPose(index, fan.length), at + index * stagger, d(0.5), "back.out(1.3)");
-      else toDocPose(tl, item.mesh, insidePose(order++), at, d(0.35), "power2.in");
+      else stowDoc(tl, item.mesh, order++, at);
     });
   }
 
@@ -394,7 +419,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   /** Guarda todos los documentos y cierra la boca; libera los documentos al final. Devuelve cuándo termina. */
   function stowDocuments(tl: gsap.core.Timeline, part: EnvelopePart, at: number): number {
     let order = 0;
-    stack?.items.forEach((item) => toDocPose(tl, item.mesh, insidePose(order++), at, d(0.35), "power2.in"));
+    stack?.items.forEach((item) => stowDoc(tl, item.mesh, order++, at));
     tl.to(part.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, at + d(0.3));
     tl.call(() => disposeStack(), [], at + d(0.6));
     return at + d(0.6);
@@ -439,7 +464,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       if (prev) {
         const fan = fanIds();
         const index = fan.indexOf(prev.doc.id);
-        toDocPose(tl, prev.mesh, index >= 0 ? fanPose(index, fan.length) : insidePose(), 0, d(0.45));
+        if (index >= 0) toDocPose(tl, prev.mesh, fanPose(index, fan.length), 0, d(0.45));
+        else stowDoc(tl, prev.mesh, 0, 0);
       }
       // Sale hacia arriba, luego al frente y derecho.
       tl.to(item.mesh.position, { y: DOCUMENT.insideY + DOCUMENT.rise + 0.45, duration: d(0.25), ease: "power2.in" }, 0);
