@@ -15,8 +15,8 @@ export interface BinderParts {
   /** Mallas que abren la carpeta al tocarlas. */
   hitTargets: THREE.Object3D[];
   /**
-   * Puntas de cada anilla (los dos cuartos de arriba, con bisagra a los lados).
-   * Para abrir: `rotation.z` de `ringHalves.right` negativa y de `ringHalves.left` positiva.
+   * Mitades móviles de las anillas (bisagra en la placa). Para abrir: `rotation.z`
+   * de `ringHalves.left` positiva. `right` queda vacío: esa mitad es fija.
    */
   ringHalves: { left: THREE.Group[]; right: THREE.Group[] };
 }
@@ -74,31 +74,24 @@ export function createBinder(kit: MaterialKit): BinderParts {
   mesh(roundedSlab(0.34, H - 0.7, 0.07, 0.14, 0.03), kit.metal, group, [RINGS.x - 0.02, 0, plateZ]);
   const rivet = new THREE.CylinderGeometry(0.05, 0.05, 0.03, 20).rotateX(Math.PI / 2);
   for (const y of [-(H - 1.1) / 2, (H - 1.1) / 2]) mesh(rivet, kit.metal, group, [RINGS.x, y, plateZ + 0.045]);
-  // Cada anilla: una mitad trasera fija (unida a la placa) y dos cuartos de arriba
-  // con bisagra a los lados; al sacar o regresar un sobre solo se abre la parte de
-  // arriba, como una carpeta de argollas real. Local: +Y = frente (arriba de la pila).
+  // Anillas tipo "D-ring": la mitad del lado de los sobres queda fija y la mitad
+  // del lado de la tapa se levanta desde su bisagra en la placa; solo se abren
+  // arriba. Local: +Y = frente (arriba de la pila), -Y = placa.
   const r = RINGS.radius;
-  const base = new THREE.TorusGeometry(r, RINGS.tube, 14, 32, Math.PI).rotateZ(Math.PI);
-  // Cuarto derecho: de (r,0) a (0,r), bisagra en (r,0). Cuarto izquierdo: de (0,r) a (-r,0), bisagra en (-r,0).
-  const rightTip = new THREE.TorusGeometry(r, RINGS.tube, 14, 16, Math.PI / 2).translate(-r, 0, 0);
-  const leftTip = new THREE.TorusGeometry(r, RINGS.tube, 14, 16, Math.PI / 2).rotateZ(Math.PI / 2).translate(r, 0, 0);
+  const fixedHalf = new THREE.TorusGeometry(r, RINGS.tube, 14, 32, Math.PI).rotateZ(-Math.PI / 2); // x ≥ 0
+  const movingHalf = new THREE.TorusGeometry(r, RINGS.tube, 14, 32, Math.PI).rotateZ(Math.PI / 2).translate(0, r, 0); // x ≤ 0, bisagra en el origen
   const ringHalves: BinderParts["ringHalves"] = { left: [], right: [] };
   for (const y of RINGS.ys) {
     const ring = new THREE.Group();
     ring.position.set(RINGS.x, y, RINGS.z);
     ring.rotation.x = Math.PI / 2; // plano XZ: atraviesa la pila de sobres
     group.add(ring);
-    mesh(base, kit.metal, ring, [0, 0, 0]);
-    for (const [geometry, hingeX, list] of [
-      [rightTip, r, ringHalves.right],
-      [leftTip, -r, ringHalves.left],
-    ] as const) {
-      const hinge = new THREE.Group();
-      hinge.position.x = hingeX;
-      ring.add(hinge);
-      mesh(geometry, kit.metal, hinge, [0, 0, 0]);
-      list.push(hinge);
-    }
+    mesh(fixedHalf, kit.metal, ring, [0, 0, 0]);
+    const hinge = new THREE.Group();
+    hinge.position.y = -r; // bisagra: punto de la anilla sobre la placa
+    ring.add(hinge);
+    mesh(movingHalf, kit.metal, hinge, [0, 0, 0]);
+    ringHalves.left.push(hinge);
   }
 
   // ── Tapa delantera (articulada en el lomo) ────────────────────────────────

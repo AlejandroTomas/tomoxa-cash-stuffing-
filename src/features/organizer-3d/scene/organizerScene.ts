@@ -69,8 +69,8 @@ const MIN_PRESENT_Z = 1.6;
 const IDLE_MS = 6000;
 /** Cuadros (ms) por encima de los cuales se baja la resolución del render (~40 fps). */
 const SLOW_FRAME_MS = 25;
-/** Cuánto se abren las puntas de cada anilla (rad): solo se separan arriba. */
-const RINGS_OPEN = 0.6;
+/** Cuánto se levanta la mitad móvil de cada anilla (rad). */
+const RINGS_OPEN = 0.36;
 /** Cuánto suben los sobres de atrás al enfocar uno: lo mismo que el enfocado, así su etiqueta queda igual de visible que en reposo. */
 const BEHIND_RISE = FOCUS_LIFT + 0.02;
 /** Cuánto se inclina el labio del sobre al abrirlo. */
@@ -181,7 +181,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     parts.forEach((part) => part.setLayer(10 + part.index * 5));
   }
 
-  /** Abre o cierra las anillas (las puntas de arriba giran sobre sus bisagras laterales). */
+  /** Abre o cierra las anillas (la mitad móvil gira sobre su bisagra en la placa). */
   function ringsTo(tl: gsap.core.Timeline, open: boolean, at: number, duration = d(0.28)) {
     const angle = open ? RINGS_OPEN : 0;
     tl.to(binder.ringHalves.right.map((half) => half.rotation), { z: -angle, duration, ease: open ? "back.out(1.6)" : "power2.in", stagger: d(0.02) }, at);
