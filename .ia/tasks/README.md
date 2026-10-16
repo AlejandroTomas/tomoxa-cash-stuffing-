@@ -7,5 +7,4 @@ mueve a `../context/`).
 
 **Abiertas:**
 
-- [fase-2-libro-de-movimientos.md](./fase-2-libro-de-movimientos.md) — datos
-  reales en el dispositivo: cuentas, sobres y movimientos con saldos derivados.
+Ninguna por ahora.

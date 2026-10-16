@@ -27,7 +27,8 @@ export const selectLedgerHealth = createSelector([selectBalances, selectAccounts
   unbackedDebt: unbackedDebt(balances, accounts),
 }));
 
-/** Tarjetas con deuda, reserva, deuda sin respaldo y periodo de corte. `today` = "YYYY-MM-DD". */
-export const selectCardSummaries = createSelector([selectAccounts, selectBalances, (_state: RootState, today: string) => today], (accounts, balances, today) =>
-  cardSummaries(accounts, balances, today),
+/** Tarjetas con deuda, reserva, deuda sin respaldo, próximo corte y estado de cuenta. `today` = "YYYY-MM-DD". */
+export const selectCardSummaries = createSelector(
+  [selectAccounts, selectBalances, selectMovements, (_state: RootState, today: string) => today],
+  (accounts, balances, movements, today) => cardSummaries(accounts, balances, movements, today),
 );

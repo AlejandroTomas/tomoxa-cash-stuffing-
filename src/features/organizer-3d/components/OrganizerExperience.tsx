@@ -9,7 +9,9 @@ import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import { AccountsSheet } from "@/features/ledger/components/AccountsSheet";
 import { RecordMovementDialog, type RecordDefaults } from "@/features/ledger/components/RecordMovementDialog";
 import { MAX_ACTIVE_ENVELOPES } from "@/features/ledger/domain/envelopes";
-import { selectLedgerHealth } from "@/features/ledger/selector";
+import { paymentDueSoon } from "@/features/ledger/domain/cards";
+import { selectCardSummaries, selectLedgerHealth } from "@/features/ledger/selector";
+import { toLocalIsoDate } from "@/utils/localDate";
 import { useAppSelector } from "@/hooks/useReduxHooks";
 import type { MovementDraft } from "@/features/ledger/domain/validation";
 import { showDialog } from "@/utils/dialogService";
@@ -79,8 +81,11 @@ export function OrganizerExperience() {
   // Al cubrir un sobre sobregirado: origen, destino y monto propuestos.
   const [cover, setCover] = useState<{ from: string; to: string; amountMinor: number } | null>(null);
   const health = useAppSelector(selectLedgerHealth);
-  const alert =
-    health.unbackedDebt > 0 && health.overdrawn > 0 ? "2 avisos" : health.unbackedDebt > 0 ? "Deuda sin respaldo" : health.overdrawn > 0 ? "Sobregirado" : null;
+  const [today] = useState(() => toLocalIsoDate(new Date()));
+  const cardDue = useAppSelector((state) => selectCardSummaries(state, today)).some((card) => paymentDueSoon(card.statement));
+  // Un aviso por tema; si hay más de uno, se cuentan (el detalle está en Cuentas).
+  const alerts = [cardDue && "Pagar tarjeta", health.unbackedDebt > 0 && "Deuda sin respaldo", health.overdrawn > 0 && "Sobregirado"].filter((text): text is string => Boolean(text));
+  const alert = alerts.length > 1 ? `${alerts.length} avisos` : (alerts[0] ?? null);
   const openRecord = (defaults: RecordDefaults) => {
     setRecordDefaults(defaults);
     setDialog("record");

@@ -22,7 +22,7 @@ import type { Account, Movement } from "../domain/types";
 import { checkMovement } from "../domain/validation";
 import { recordMovement } from "../ledgerSlice";
 import { selectAccounts, selectActiveEnvelopes, selectBalances, selectCardSummaries, selectEnvelopes, selectLedgerSettings, selectMovements } from "../selector";
-import { formatDay } from "./format";
+import { dueText, formatDay } from "./format";
 
 export interface RecordDefaults {
   kind?: RecordKind;
@@ -270,11 +270,16 @@ function RecordMovementForm({ defaults, onRecorded, onClose }: Omit<RecordMoveme
         </div>
         {kind === "cardPayment" && card && (
           <div className="flex flex-wrap items-center gap-1.5">
+            {card.statement.amount > 0 && card.statement.amount < card.debt && (
+              <button type="button" className={chip} onClick={() => setValue("amount", minorToInput(card.statement.amount), { shouldValidate: true })}>
+                Pago del corte · {formatMinor(card.statement.amount)}
+              </button>
+            )}
             <button type="button" className={chip} disabled={!card.debt} onClick={() => setValue("amount", minorToInput(card.debt), { shouldValidate: true })}>
               Toda la deuda
             </button>
             <span className="text-xs text-muted-foreground">
-              Corte {formatDay(card.period.cutoff)} · paga antes del {formatDay(card.period.due)}
+              {card.statement.amount > 0 ? `Corte del ${formatDay(card.statement.cutoff)}, ${dueText(card.statement.due, card.statement.daysLeft)}` : `Corte del ${formatDay(card.statement.cutoff)} pagado`}
             </span>
           </div>
         )}

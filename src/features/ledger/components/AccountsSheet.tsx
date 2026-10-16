@@ -18,12 +18,12 @@ import { cn } from "@/lib/utils";
 import { showDialog } from "@/utils/dialogService";
 import { toLocalIsoDate } from "@/utils/localDate";
 import { backupFileName } from "../domain/backup";
-import type { CardSummary } from "../domain/cards";
+import { paymentDueSoon, type CardSummary } from "../domain/cards";
 import { formatMinor } from "../domain/money";
 import type { Account, Movement } from "../domain/types";
 import { cancelMovement, exportLedger, importLedger, resetLedger, saveCardSettings, saveLedgerSettings } from "../ledgerSlice";
 import { selectAccounts, selectActiveEnvelopes, selectBalances, selectCardSummaries, selectEnvelopes, selectLedgerHealth, selectLedgerSettings, selectMovements } from "../selector";
-import { formatDay, MOVEMENT_LABELS, WEEKDAYS } from "./format";
+import { dueText, formatDay, MOVEMENT_LABELS, WEEKDAYS } from "./format";
 
 interface AccountsSheetProps {
   open: boolean;
@@ -91,13 +91,19 @@ function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | 
   const cards = useAppSelector((state) => selectCardSummaries(state, today));
   const money = accounts.filter((account) => !account.archived && account.kind !== "credit").sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "debit" ? -1 : 1));
   const overdrawn = envelopes.filter((envelope) => (balances.envelopes[envelope.id] ?? 0) < 0);
+  const due = cards.filter((card) => paymentDueSoon(card.statement));
 
   return (
     <div className="flex flex-col gap-5">
-      {(health.unbackedDebt > 0 || overdrawn.length > 0) && (
+      {(due.length > 0 || health.unbackedDebt > 0 || overdrawn.length > 0) && (
         <div role="status" className="flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-foreground">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
           <p>
+            {due.map((card) => (
+              <span key={card.account.id}>
+                Paga {formatMinor(card.statement.amount)} de {card.account.name} {dueText(card.statement.due, card.statement.daysLeft)}.{" "}
+              </span>
+            ))}
             {health.unbackedDebt > 0 && <>Tienes {formatMinor(health.unbackedDebt)} de deuda sin dinero apartado. </>}
             {overdrawn.length > 0 && <>{overdrawn.length === 1 ? "Un sobre está sobregirado" : `${overdrawn.length} sobres están sobregirados`}: cúbrelos con dinero de otro sobre.</>}
           </p>
@@ -154,15 +160,26 @@ function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | 
 }
 
 function CardPanel({ card, onPay }: { card: CardSummary; onPay: () => void }) {
+  const { statement } = card;
+  const urgent = paymentDueSoon(statement);
   return (
     <section aria-labelledby={`card-${card.account.id}`} className="space-y-2">
       <h3 id={`card-${card.account.id}`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <CreditCard className="size-4" aria-hidden="true" /> {card.account.name}
       </h3>
       <dl className={panel}>
+        <div className="flex items-start gap-3 py-2.5">
+          <dt className="flex-1 text-foreground/80">
+            Pago para no generar intereses
+            <span className={cn("block text-xs", urgent ? "font-medium text-warning" : "text-muted-foreground")}>
+              {statement.amount > 0 ? `Corte del ${formatDay(statement.cutoff)}, ${dueText(statement.due, statement.daysLeft)}` : `Corte del ${formatDay(statement.cutoff)}: al corriente`}
+            </span>
+          </dt>
+          <dd className="font-semibold text-foreground tabular-nums">{formatMinor(statement.amount)}</dd>
+        </div>
         <div className={row}>
-          <dt className="flex-1 text-foreground/80">Deuda</dt>
-          <dd className="font-semibold text-foreground tabular-nums">{formatMinor(card.debt)}</dd>
+          <dt className="flex-1 text-foreground/80">Deuda total</dt>
+          <dd className="font-medium text-foreground tabular-nums">{formatMinor(card.debt)}</dd>
         </div>
         <div className={row}>
           <dt className="flex-1 text-foreground/80">Apartado para pagarla</dt>
@@ -182,10 +199,8 @@ function CardPanel({ card, onPay }: { card: CardSummary; onPay: () => void }) {
           </dd>
         </div>
         <div className={row}>
-          <dt className="flex-1 text-foreground/80">Corte · pago</dt>
-          <dd className="text-foreground tabular-nums">
-            {formatDay(card.period.cutoff)} · {formatDay(card.period.due)}
-          </dd>
+          <dt className="flex-1 text-foreground/80">Próximo corte</dt>
+          <dd className="text-foreground tabular-nums">{formatDay(card.nextCutoff)}</dd>
         </div>
       </dl>
       <Button className="w-full rounded-xl" disabled={!card.debt} onClick={onPay}>

@@ -1,6 +1,8 @@
+import { differenceInCalendarDays } from "date-fns";
+import { parseLocalDate } from "@/utils/localDate";
 import { overdrawn, type Balances } from "./balances";
-import { statementPeriodFor, type StatementPeriod } from "./statement";
-import type { Account, CardSettings, LedgerSettings, RecurringIncome } from "./types";
+import { lastCutoffOnOrBefore, statementPeriodFor } from "./statement";
+import type { Account, CardSettings, LedgerSettings, Movement, RecurringIncome } from "./types";
 
 /** Situación de una tarjeta para mostrar y para proponer el pago. */
 export interface CardSummary {
@@ -11,15 +13,49 @@ export interface CardSummary {
   reserve: number;
   /** Deuda que no cubre la reserva disponible (descontando sobres sobregirados). */
   unbacked: number;
-  /** Periodo que contiene "hoy": corte y fecha límite de pago. */
-  period: StatementPeriod;
+  /** Próximo corte (o hoy, si hoy es día de corte). */
+  nextCutoff: string;
+  /** Estado de cuenta del último corte: lo que hay que pagar y hasta cuándo para no generar intereses. */
+  statement: CardStatement;
+}
+
+export interface CardStatement {
+  cutoff: string;
+  due: string;
+  /** Compras hasta el corte menos lo ya pagado (centavos; 0 = ya está cubierto). */
+  amount: number;
+  /** Días que faltan para la fecha límite (negativo si ya pasó). */
+  daysLeft: number;
+}
+
+/** Días antes de la fecha límite en que se avisa del pago pendiente. */
+export const PAYMENT_REMINDER_DAYS = 5;
+
+/** El pago se avisa si queda algo por pagar y la fecha límite está cerca (o ya pasó). */
+export const paymentDueSoon = (statement: CardStatement) => statement.amount > 0 && statement.daysLeft <= PAYMENT_REMINDER_DAYS;
+
+/**
+ * Estado de cuenta del último corte. Los movimientos cancelados no cuentan; los
+ * pagos cuentan hasta hoy (los anteriores al corte ya bajaron la deuda del corte).
+ */
+export function cardStatement(account: Account & { card: CardSettings }, movements: readonly Movement[], reversed: Readonly<Record<string, string>>, today: string): CardStatement {
+  const cutoff = lastCutoffOnOrBefore(today, account.card.cutoffDay);
+  const { due } = statementPeriodFor(cutoff, account.card.cutoffDay, account.card.paymentDays);
+  let charges = 0;
+  let payments = 0;
+  for (const movement of movements) {
+    if (movement.kind === "reversal" || reversed[movement.id]) continue;
+    if (movement.kind === "expense" && movement.accountId === account.id && movement.date <= cutoff) charges += movement.amountMinor;
+    if (movement.kind === "cardPayment" && movement.toAccountId === account.id && movement.date <= today) payments += movement.amountMinor;
+  }
+  return { cutoff, due, amount: Math.max(0, charges - payments), daysLeft: differenceInCalendarDays(parseLocalDate(due), parseLocalDate(today)) };
 }
 
 /**
  * Resumen por tarjeta. Si hay sobres sobregirados, "pidieron prestada" la
  * reserva: se descuenta primero de la primera tarjeta, luego de la siguiente.
  */
-export function cardSummaries(accounts: readonly Account[], balances: Balances, today: string): CardSummary[] {
+export function cardSummaries(accounts: readonly Account[], balances: Balances, movements: readonly Movement[], today: string): CardSummary[] {
   let borrowed = overdrawn(balances);
   return accounts
     .filter((account): account is Account & { card: CardSettings } => account.kind === "credit" && !account.archived && Boolean(account.card))
@@ -34,7 +70,8 @@ export function cardSummaries(accounts: readonly Account[], balances: Balances, 
         debt,
         reserve,
         unbacked: Math.max(0, debt - (available - lent)),
-        period: statementPeriodFor(today, account.card.cutoffDay, account.card.paymentDays),
+        nextCutoff: statementPeriodFor(today, account.card.cutoffDay, account.card.paymentDays).cutoff,
+        statement: cardStatement(account, movements, balances.reversed, today),
       };
     });
 }

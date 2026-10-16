@@ -2,8 +2,33 @@
 
 Cuentas (dónde está el dinero), sobres (para qué está apartado) y movimientos
 inmutables. Los saldos **nunca se guardan**: se calculan con `computeBalances`.
-Todo vive en IndexedDB (Dexie, base `aurora-ledger`); no hay servidor. Spec y
-decisiones: `.ia/tasks/fase-2-libro-de-movimientos.md`.
+Todo vive en IndexedDB (Dexie, base `aurora-ledger`); no hay servidor (se podría
+sincronizar después con `core/sync`). Los sobres no se borran: se archivan.
+
+## Modelo de dinero
+
+Montos enteros en centavos, siempre positivos. Un movimiento no se edita ni se
+borra: se cancela con su inverso (`reversal`).
+
+| Tipo | Cuentas | Sobres |
+|---|---|---|
+| `income` | + débito o efectivo | + sobre (por defecto Disponible) |
+| `expense` con débito/efectivo | − cuenta | − sobre del gasto |
+| `expense` con crédito | + deuda de la tarjeta | − sobre del gasto · + sobre de reserva (monto completo) |
+| `assignment` (mover) | — | − origen · + destino |
+| `accountTransfer` (depósito/retiro) | − cuenta A · + cuenta B | — |
+| `cardPayment` | − débito/efectivo · − deuda | − sobre de reserva |
+
+Apartar en el sobre Tarjeta no mueve dinero físico: si la reserva está en efectivo
+y la tarjeta se paga desde débito, hace falta un depósito (`accountTransfer`).
+Ajustes por defecto: nómina el viernes a débito, efectivo el lunes, una tarjeta con
+corte el 15 y pago 20 días después (fechas reales: el corte 31 cae el 30 en meses
+cortos), semana de lunes a domingo, MXN.
+
+**Estado de cuenta** (`cardStatement`): lo que hay que pagar para no generar
+intereses es lo comprado hasta el último corte menos lo pagado hasta hoy (los
+cancelados no cuentan). La fecha límite es la de ese corte, no la del periodo en
+curso. Se avisa en la nav cuando faltan `PAYMENT_REMINDER_DAYS` (5) días o menos.
 
 ```
 domain/        types · balances (saldos, deuda sin respaldo) · validation (reglas) ·

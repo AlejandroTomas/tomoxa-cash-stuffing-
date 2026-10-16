@@ -29,3 +29,10 @@ export function statementPeriodFor(date: string, cutoffDay: number, paymentDays:
     due: toLocalIsoDate(addDays(cutoffDate, paymentDays)),
   };
 }
+
+/** Último corte en o antes de `date` (si hoy es día de corte, es hoy). */
+export function lastCutoffOnOrBefore(date: string, cutoffDay: number): string {
+  const day = parseLocalDate(date);
+  const thisMonth = cutoffDateIn(day.getFullYear(), day.getMonth(), cutoffDay);
+  return date >= thisMonth ? thisMonth : cutoffDateIn(day.getFullYear(), day.getMonth() - 1, cutoffDay);
+}
