@@ -111,15 +111,6 @@ export const DOCUMENT = {
   rise: 1.2,
 } as const;
 
-/**
- * Altura (centro, en coordenadas del sobre) a la que un documento cruza entre el
- * abanico y el frente: su borde inferior libra la boca del sobre. Si cruzara más
- * abajo atravesaría la cara del sobre y a los documentos de enfrente.
- */
-export const DOCUMENT_TRAVEL_Y = ENVELOPE.height / 2 + DOCUMENT.height / 2 + 0.15;
-/** Cuánto bajan los documentos de enfrente para dejar pasar al que sale o regresa (quedan dentro del sobre). */
-export const DOCUMENT_DUCK = DOCUMENT.rise + 0.05;
-
 export interface DocumentPose {
   x: number;
   y: number;
@@ -150,3 +141,20 @@ export function fanPose(index: number, count: number): DocumentPose {
     rz: n === 1 ? 0 : -offset * 0.2,
   };
 }
+
+/** Punta más alta del abanico lleno (con el giro, la esquina sube un poco más que el centro). */
+export function fanTop(count: number = DOCUMENT.maxFan): number {
+  let top = DOCUMENT.insideY + DOCUMENT.height / 2;
+  for (let index = 0; index < count; index++) {
+    const pose = fanPose(index, count);
+    top = Math.max(top, pose.y + (DOCUMENT.height / 2) * Math.cos(pose.rz) + (DOCUMENT.width / 2) * Math.abs(Math.sin(pose.rz)));
+  }
+  return top;
+}
+
+/**
+ * Altura (centro, en coordenadas del sobre) a la que un documento cruza entre el
+ * abanico y el frente: su borde inferior libra la punta de los demás y la boca
+ * del sobre, así pasa por delante sin tocarlos y nadie más se mueve.
+ */
+export const DOCUMENT_TRAVEL_Y = Math.max(fanTop(), ENVELOPE.height / 2) + DOCUMENT.height / 2 + 0.06;

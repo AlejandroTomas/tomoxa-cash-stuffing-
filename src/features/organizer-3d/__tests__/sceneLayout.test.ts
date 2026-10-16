@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, freeNdc, outsideNdc, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, DOCUMENT_DUCK, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
+import { BINDER, DOCUMENT, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, fanTop, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
 
@@ -196,14 +196,9 @@ describe("dinero que llega de fuera o se va", () => {
 });
 
 describe("documentos que salen y regresan", () => {
-  const top = ENVELOPE.height / 2;
-  it("cruzan con su borde inferior por encima de la boca del sobre", () => expect(DOCUMENT_TRAVEL_Y - DOCUMENT.height / 2).toBeGreaterThan(top));
-  it("los de enfrente se agachan hasta quedar dentro del sobre", () => {
-    for (let index = 0; index < DOCUMENT.maxFan; index++) {
-      const pose = fanPose(index, DOCUMENT.maxFan);
-      // Con el giro del abanico la esquina sube un poco más que el centro.
-      const corner = (DOCUMENT.height / 2) * Math.cos(pose.rz) + (DOCUMENT.width / 2) * Math.abs(Math.sin(pose.rz));
-      expect(pose.y - DOCUMENT_DUCK + corner).toBeLessThan(top);
-    }
+  const bottom = DOCUMENT_TRAVEL_Y - DOCUMENT.height / 2;
+  it("cruzan con su borde inferior por encima de la boca del sobre", () => expect(bottom).toBeGreaterThan(ENVELOPE.height / 2));
+  it("cruzan por encima de la punta de todos los demás (nadie más se mueve)", () => {
+    for (let count = 1; count <= DOCUMENT.maxFan; count++) expect(bottom).toBeGreaterThan(fanTop(count));
   });
 });

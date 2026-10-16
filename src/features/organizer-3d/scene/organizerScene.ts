@@ -9,7 +9,7 @@ import { classifyGesture, TAP_SLOP } from "../domain/gestures";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
-import { BINDER, DOCUMENT, DOCUMENT_DUCK, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, DOCUMENT, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "./contract";
@@ -253,7 +253,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     const vp = viewport();
     const open = rigFor("open", vp);
     const x = 0.25 + open.tx * 0.5;
-    const extraHeight = DOCUMENT.rise + DOCUMENT.height * 0.5 + 0.9;
+    // Lugar arriba para el documento que cruza por encima del abanico.
+    const extraHeight = DOCUMENT_TRAVEL_Y + DOCUMENT.height / 2 - ENVELOPE.height / 2 + 0.9;
     // Siempre por delante de la pila de sobres; si a esa distancia no cabe (móvil), se achica.
     let scale = EXTRACTED.scale;
     let z = 0;
@@ -350,8 +351,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   /**
    * Del abanico al frente sin atravesar a nadie (como los sobres): 1) sube en su
-   * plano hasta librar la boca, 2) viene al frente a esa altura, 3) baja a
-   * leerse. Devuelve cuándo cruzó y cuándo termina.
+   * plano hasta librar la punta de los demás y la boca, 2) viene al frente a esa
+   * altura, 3) baja a leerse delante de todos. Los demás no se mueven.
+   * Devuelve cuándo cruzó y cuándo termina.
    */
   function docOut(tl: gsap.core.Timeline, mesh: THREE.Object3D, at: number) {
     const up = d(0.3);
@@ -369,7 +371,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     return { crossed: at + up + across, end: at + up + across + down };
   }
 
-  /** Del frente a su lugar por el mismo camino: sube, va atrás sobre su lugar y baja (al abanico o adentro). */
+  /** Del frente a su lugar por el mismo camino: sube, va atrás sobre su lugar y baja en su plano (al abanico o adentro). */
   function docBack(tl: gsap.core.Timeline, mesh: THREE.Object3D, target: DocumentPose, at: number, stow: boolean) {
     const up = d(0.3);
     const across = d(0.35);
@@ -388,24 +390,11 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     return { crossed: at + up + across, end };
   }
 
-  /** Los del abanico delante de `depth` (índice menor = más al frente) bajan para dejar pasar y vuelven. */
-  function duckFront(tl: gsap.core.Timeline, depth: number, from: number, until: number, moving: readonly string[]) {
-    if (!stack) return;
-    const fan = fanIds();
-    fan.forEach((id, index) => {
-      const item = stack?.items.get(id);
-      if (!item || index >= depth || moving.includes(id)) return;
-      const pose = fanPose(index, fan.length);
-      tl.to(item.mesh.position, { y: pose.y - DOCUMENT_DUCK, duration: d(0.25), ease: "power2.inOut" }, from);
-      tl.to(item.mesh.position, { y: pose.y, duration: d(0.35), ease: "power2.out" }, until);
-    });
-  }
-
   /** Lugar al que vuelve un documento: su sitio en el abanico o, si el filtro lo dejó fuera, adentro del sobre. */
-  function homeOf(id: string): { pose: DocumentPose; stow: boolean; depth: number } {
+  function homeOf(id: string): { pose: DocumentPose; stow: boolean } {
     const fan = fanIds();
     const index = fan.indexOf(id);
-    return index >= 0 ? { pose: fanPose(index, fan.length), stow: false, depth: index } : { pose: insidePose(0), stow: true, depth: fan.length };
+    return index >= 0 ? { pose: fanPose(index, fan.length), stow: false } : { pose: insidePose(0), stow: true };
   }
 
   async function openEnvelope(id: EnvelopeId, documents: readonly EnvelopeDocument[], visibleIds: readonly string[], phrase: string) {
@@ -449,7 +438,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   /** Guarda todos los documentos y cierra la boca; libera los documentos al final. Devuelve cuándo termina. */
   function stowDocuments(tl: gsap.core.Timeline, part: EnvelopePart, at: number): number {
-    // El que está fuera regresa primero por arriba de la boca; los demás bajan mientras tanto.
+    // El que está fuera regresa por arriba de la boca mientras los demás se guardan.
     const picked = pickedId ? stack?.items.get(pickedId) : undefined;
     const start = picked ? docBack(tl, picked.mesh, insidePose(0), at, true).crossed : at;
     let order = picked ? 1 : 0;
@@ -498,10 +487,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       const prev = previous && previous !== id ? stack?.items.get(previous) : undefined;
       const prevHome = prev ? homeOf(prev.doc.id) : null;
       const back = prev && prevHome ? docBack(tl, prev.mesh, prevHome.pose, 0, prevHome.stow) : { crossed: 0, end: 0 };
-      const out = docOut(tl, item.mesh, back.crossed);
-      // Los de enfrente de cualquiera de los dos se agachan mientras cruzan.
-      const depth = Math.max(homeOf(id).depth, prevHome?.depth ?? 0);
-      duckFront(tl, depth, 0, out.crossed, prev ? [id, prev.doc.id] : [id]);
+      docOut(tl, item.mesh, back.crossed);
     });
   }
 
@@ -514,8 +500,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     await play((tl) => {
       // Los demás ya están en su lugar (el filtro los reacomoda aunque haya uno fuera); él regresa por arriba.
       const home = homeOf(id);
-      const back = docBack(tl, item.mesh, home.pose, 0, home.stow);
-      duckFront(tl, home.depth, 0, back.crossed, [id]);
+      docBack(tl, item.mesh, home.pose, 0, home.stow);
     });
   }
 
