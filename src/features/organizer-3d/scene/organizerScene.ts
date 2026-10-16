@@ -65,6 +65,10 @@ const LIFT = POCKET_CLEARANCE;
 const EXTRACTED = { rx: -BINDER.tilt.x * 0.88, ry: -BINDER.tilt.y * 0.7 - 0.06, rz: -BINDER.tilt.z * 0.8, scale: 1.06 };
 /** Z mínima del sobre presentado: por delante del sobre más cercano en abanico. */
 const MIN_PRESENT_Z = 1.6;
+/** Tras cuánto tiempo sin interacción (ms) la escena deja de dibujarse hasta que algo cambie. */
+const IDLE_MS = 6000;
+/** Cuadros (ms) por encima de los cuales se baja la resolución del render (~40 fps). */
+const SLOW_FRAME_MS = 25;
 /** Cuánto se abren las mitades de cada anilla (rad). */
 const RINGS_OPEN = 0.42;
 /** Cuánto suben los sobres de atrás al enfocar uno: lo mismo que el enfocado, así su etiqueta queda igual de visible que en reposo. */
@@ -77,7 +81,15 @@ const READING = { x: 0, y: 0.95, z: 0.7, scale: 1.22 };
 export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const { renderer, scene, camera, dispose: disposeStage } = createStage(mount);
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
-  const kit = createMaterialKit(maxAnisotropy);
+  // Dibujar solo cuando algo cambia (ver "Bucle de render"); cargar texturas o fuentes también despierta.
+  let awakeUntil = performance.now() + IDLE_MS;
+  const wake = (ms = IDLE_MS) => {
+    awakeUntil = Math.max(awakeUntil, performance.now() + ms);
+  };
+  const loading = new THREE.LoadingManager(() => wake(500));
+  loading.onProgress = () => wake(500);
+  void document.fonts?.ready.then(() => wake(500));
+  const kit = createMaterialKit(maxAnisotropy, loading);
 
   // root: flotación y paralaje · tilt: la carpeta "sobre la mesa", en 3/4.
   const root = new THREE.Group();
@@ -138,6 +150,11 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   let settle: (() => void) | null = null;
   let reframePending = false;
   let shadowsDirtyUntil = 0;
+  /** Algo se mueve durante `ms`: sombras al día y escena despierta. */
+  function markDirty(ms: number) {
+    shadowsDirtyUntil = Math.max(shadowsDirtyUntil, performance.now() + ms);
+    wake(ms + 300);
+  }
 
   function play(build: (tl: gsap.core.Timeline) => void): Promise<void> {
     if (disposed) return Promise.resolve();
@@ -155,7 +172,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
         build(tl);
         running = tl;
         settle = resolve;
-        shadowsDirtyUntil = performance.now() + tl.duration() * 1000 + 200;
+        markDirty(tl.duration() * 1000 + 200);
       });
     });
   }
@@ -356,6 +373,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     if (!caption) return;
     writing?.kill();
     const total = Array.from(text).length;
+    wake(2000);
     if (reducedMotion) {
       caption.draw(text, total);
       return;
@@ -479,7 +497,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       const tl = gsap.timeline();
       arrange(tl, 0, d(0.03));
       fanTimeline = tl;
-      shadowsDirtyUntil = performance.now() + tl.duration() * 1000 + 200;
+      markDirty(tl.duration() * 1000 + 200);
     });
   }
 
@@ -582,6 +600,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   function restyleEnvelope(item: EnvelopeItem) {
     byId.get(item.id)?.restyle(item);
+    wake(800);
   }
 
   // ── Puntero: hover, paralaje y toques ─────────────────────────────────────
@@ -611,7 +630,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       if (next) gsap.to(next.hover.position, { y: 0.08, duration: d(0.3), ease: "power2.out" });
     });
     hovered = next;
-    shadowsDirtyUntil = performance.now() + 400;
+    markDirty(400);
   }
   function clearHover() {
     setHover(null);
@@ -638,7 +657,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     if (active && !horizontal && (stage === "focused" || stage === "extracted")) {
       active.hover.position.y = THREE.MathUtils.clamp(-dy / height, -0.3, 0.4) * 1.2;
     }
-    shadowsDirtyUntil = performance.now() + 200;
+    markDirty(200);
   }
 
   /** Suelta el arrastre: lo que no se convirtió en acción vuelve a su lugar. */
@@ -655,10 +674,11 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       }
       if (active) gsap.to(active.hover.position, { y: 0, duration: d(0.3), ease: "power2.out" });
     });
-    shadowsDirtyUntil = performance.now() + 500;
+    markDirty(500);
   }
 
   function onPointerMove(event: PointerEvent) {
+    wake();
     if (downAt && event.pointerId === downAt.id) {
       const dx = event.clientX - downAt.x;
       const dy = event.clientY - downAt.y;
@@ -688,6 +708,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     clearHover();
   }
   function onPointerDown(event: PointerEvent) {
+    wake();
     if (event.button !== 0) return;
     const hit = pick(event);
     downAt = { x: event.clientX, y: event.clientY, t: performance.now(), id: event.pointerId, envelope: hit.envelope, document: hit.document };
@@ -741,12 +762,14 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     canvasSize.height = height;
     renderer.setSize(width, height, false);
     reframe();
+    wake();
   }
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(mount);
   resize();
   const intersectionObserver = new IntersectionObserver((entries) => {
     visible = entries[0]?.isIntersecting ?? true;
+    if (visible) wake(1000);
   });
   intersectionObserver.observe(mount);
 
@@ -755,10 +778,37 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   renderer.shadowMap.autoUpdate = false;
   let frame = 0;
   let tick = 0;
+  let lastRenderAt = 0;
+  let pixelRatio = renderer.getPixelRatio();
+  const frameTimes: number[] = [];
+  /** ¿Hay alguna animación de GSAP corriendo (hover, abanico, escritura…)? */
+  const anyTweenActive = () => gsap.globalTimeline.getChildren(true, true, false).some((child) => child.isActive());
+
+  /** Si los cuadros salen lentos de forma sostenida, baja la resolución (nunca sube: evita oscilar). */
+  function adaptQuality(now: number) {
+    if (lastRenderAt && now - lastRenderAt < 100) frameTimes.push(now - lastRenderAt);
+    lastRenderAt = now;
+    if (frameTimes.length < 90) return;
+    const average = frameTimes.reduce((sum, value) => sum + value, 0) / frameTimes.length;
+    frameTimes.length = 0;
+    if (average > SLOW_FRAME_MS && pixelRatio > 1) {
+      pixelRatio = Math.max(1, pixelRatio - 0.25);
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(canvasSize.width, canvasSize.height, false);
+    }
+  }
+
   const loop = (now: number) => {
     if (disposed) return;
     frame = requestAnimationFrame(loop);
     if (!visible || document.hidden) return;
+    // En reposo no se dibuja: ahorra batería. Cualquier interacción o animación despierta la escena.
+    const awake = running !== null || now < awakeUntil || anyTweenActive();
+    if (!awake) {
+      lastRenderAt = 0;
+      return;
+    }
+    adaptQuality(now);
     // Con la carpeta cerrada o abierta, deslizar en vertical desplaza la página;
     // con un sobre elegido, el lienzo recibe todos los gestos.
     const touchAction = stage === "closed" || stage === "open" ? "pan-y" : "none";
@@ -797,6 +847,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       if (same || disposed) return;
       safe = area;
       reframe();
+      wake();
     },
     onIntent: (callback) => {
       intentListener = callback;

@@ -46,6 +46,12 @@ scene/                         Three.js directo, sin React
 
 ## Decisiones
 
+- **Render en reposo: 0 cuadros.** Tras 6 s sin interacción ni animaciones (GSAP), la
+  escena deja de dibujarse; cualquier puntero, animación, cambio de tamaño, textura o
+  fuente cargada la despierta. También se pausa fuera de pantalla o con la pestaña oculta.
+- **Calidad adaptativa:** si los cuadros promedian más de 25 ms (~40 fps), el pixel ratio
+  baja de 0.25 en 0.25 hasta 1 (nunca sube, para no oscilar). Máx. inicial 1.75.
+
 - **Carpeta en 3/4** (`BINDER.tilt`) y **sobres en abanico** al abrir: giran sobre su borde
   inferior (`slotPose(i, true)`); cerrada quedan planos para que la tapa no los atraviese.
 - **Zona libre**: la interfaz mide qué tapa del lienzo (nav, tarjeta, botón) y la escena

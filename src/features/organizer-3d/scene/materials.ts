@@ -35,13 +35,13 @@ export interface PlasticOptions {
   opaque?: boolean;
 }
 
-export function createMaterialKit(maxAnisotropy: number): MaterialKit {
+export function createMaterialKit(maxAnisotropy: number, manager?: THREE.LoadingManager): MaterialKit {
   const owned = new Set<THREE.Material | THREE.Texture>();
   const track = <T extends THREE.Material | THREE.Texture>(resource: T): T => {
     owned.add(resource);
     return resource;
   };
-  const loader = new THREE.TextureLoader();
+  const loader = new THREE.TextureLoader(manager);
   const load = (name: string, srgb: boolean, repeat: [number, number]) => {
     const texture = track(loader.load(`${TEXTURES}/${name}.png`));
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;

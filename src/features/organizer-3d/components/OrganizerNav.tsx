@@ -10,8 +10,6 @@ import { AuroraMark } from "./AuroraMark";
 const LINKS = [
   { label: "Inicio", href: "/" },
   { label: "Organizer", href: "/organizer" },
-  { label: "Plantillas", href: null },
-  { label: "Ajustes", href: null },
 ] as const;
 
 /** Barra superior de vidrio: marca, secciones, tema y perfil (demo). */
@@ -35,19 +33,13 @@ export function OrganizerNav() {
         <ul className="hidden items-center gap-12 text-[0.95rem] text-foreground/80 xl:flex">
           {LINKS.map((link, index) => (
             <li key={link.label}>
-              {link.href ? (
-                <Link
-                  href={link.href}
-                  aria-current={index === 0 ? "page" : undefined}
-                  className="rounded-md outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-[current=page]:text-foreground"
-                >
-                  {link.label}
-                </Link>
-              ) : (
-                <span aria-disabled="true" title="Próximamente" className="cursor-default">
-                  {link.label}
-                </span>
-              )}
+              <Link
+                href={link.href}
+                aria-current={index === 0 ? "page" : undefined}
+                className="rounded-md outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-[current=page]:text-foreground"
+              >
+                {link.label}
+              </Link>
             </li>
           ))}
         </ul>
