@@ -9,15 +9,15 @@ decisiones: `.ia/tasks/fase-2-libro-de-movimientos.md`.
 domain/        types · balances (saldos, deuda sin respaldo) · validation (reglas) ·
                envelopes (crear/editar/archivar) · statement (cortes) · seed (datos de ejemplo) ·
                cards (resumen por tarjeta, ajustes, ingresos del día) · money (montos ↔ texto) ·
-               movementForm (formulario de registro → movimiento)
+               movementForm (formulario de registro → movimiento) · backup (respaldo JSON validado)
 errors/        LedgerRuleError (ValidationError con code y campo)
 repositories/  ledgerDatabase (Dexie, versionada) · ledger.repository (privado)
 services/      ledger.service: load (siembra la 1.ª vez), record, cancel, saveEnvelope, archiveEnvelope,
-               saveSettings, saveCardSettings
+               saveSettings, saveCardSettings, exportBackup, importBackup, resetToSample
 actions/       thunks "ledger/…" (privados; se importan desde ledgerSlice)
 ledgerSlice.ts · selector.ts   estado y saldos memorizados (selectLedgerHealth, selectCardSummaries)
 components/    RecordMovementDialog (gasto, ingreso, pago de tarjeta, depósito/retiro) ·
-               AccountsSheet (cuentas, deuda, sobregirados, ajustes)
+               AccountsSheet (cuentas, deuda, sobregirados, movimientos con "cancelar", ajustes y respaldo)
 ```
 
 ## Reglas que conviene recordar
@@ -29,6 +29,8 @@ components/    RecordMovementDialog (gasto, ingreso, pago de tarjeta, depósito/
 - Invariante (probado en cada paso): `Σ sobres = Σ débito + efectivo`.
 - Corregir = cancelar (`reversal`); un movimiento se cancela una sola vez.
 - `Disponible` y la reserva de una tarjeta no se archivan; solo se archivan sobres vacíos.
+- Importar un respaldo reemplaza todo, y solo si el archivo completo es válido: cada
+  movimiento se vuelve a aplicar en orden con `checkMovement`. Nunca se importa a medias.
 
 ## Cambiar el esquema
 

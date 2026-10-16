@@ -95,6 +95,8 @@ no cambia de rol: recibe datos de solo lectura y nunca modifica montos.
    `AccountsSheet` (botón "Cuentas" de la nav, con aviso). Sobregirado en rojo con
    indicador en la ficha; "Cubrir" abre Mover dinero con el monto que falta.
 6. **Respaldo y corrección**: exportar/importar JSON, cancelar un movimiento.
+   ✅ Hecho: en Cuentas → Ajustes → Respaldo (descargar, importar, restablecer ejemplo).
+   Cancelar desde el documento abierto del sobre o desde Cuentas → Movimientos.
 
 ## Fuera de alcance
 
@@ -103,11 +105,11 @@ estilo "rollover" (se puede agregar sobre este modelo).
 
 ## Criterios de aceptación
 
-- [ ] Los saldos de sobres y cuentas salen solo de los movimientos y cumplen el invariante.
-- [ ] Una compra a crédito no se cuenta dos veces al pagar la tarjeta.
-- [ ] Deuda sin respaldo correcta cuando un sobre no alcanza; el sobre sobregirado se marca.
-- [ ] Cancelar un movimiento deja los saldos como antes y no se puede cancelar dos veces.
-- [ ] Los datos sobreviven a recargar la página; la primera vez se siembran los de ejemplo.
-- [ ] Sobres archivados no aparecen en la carpeta pero su historial se conserva.
-- [ ] Periodos de corte con fechas reales (meses de 28–31 días, cambio de año).
-- [ ] `pnpm verify` y `pnpm build` pasan.
+- [x] Los saldos de sobres y cuentas salen solo de los movimientos y cumplen el invariante.
+- [x] Una compra a crédito no se cuenta dos veces al pagar la tarjeta.
+- [x] Deuda sin respaldo correcta cuando un sobre no alcanza; el sobre sobregirado se marca.
+- [x] Cancelar un movimiento deja los saldos como antes y no se puede cancelar dos veces.
+- [x] Los datos sobreviven a recargar la página; la primera vez se siembran los de ejemplo.
+- [x] Sobres archivados no aparecen en la carpeta pero su historial se conserva.
+- [x] Periodos de corte con fechas reales (meses de 28–31 días, cambio de año).
+- [x] `pnpm verify` y `pnpm build` pasan.

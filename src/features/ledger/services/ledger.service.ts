@@ -1,3 +1,4 @@
+import { createBackup, parseBackup, type LedgerBackup } from "../domain/backup";
 import { computeBalances } from "../domain/balances";
 import { checkCardSettings, checkSettings } from "../domain/cards";
 import { checkArchive, checkEnvelope } from "../domain/envelopes";
@@ -26,6 +27,26 @@ export function createLedgerService({ repository, now, newId }: ServiceDeps) {
       }
       const data = await repository.loadAll();
       return { ...data, settings: data.settings ?? DEFAULT_SETTINGS };
+    },
+
+    /** Todo el libro como respaldo (para descargar). */
+    async exportBackup(): Promise<LedgerBackup> {
+      const data = await repository.loadAll();
+      return createBackup({ accounts: data.accounts, envelopes: data.envelopes, movements: data.movements, settings: data.settings ?? DEFAULT_SETTINGS }, now().toISOString());
+    },
+
+    /** Reemplaza el libro con un respaldo, solo si es válido completo. */
+    async importBackup(text: string): Promise<LedgerData> {
+      const result = parseBackup(text);
+      if ("message" in result) throw new LedgerRuleError({ code: "INVALID_BACKUP", field: "form", message: result.message });
+      await repository.replaceAll(result.contents, now().toISOString());
+      return this.load();
+    },
+
+    /** Borra todo y vuelve a los datos de ejemplo. */
+    async resetToSample(): Promise<LedgerData> {
+      await repository.replaceAll({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: seedMovements(), settings: DEFAULT_SETTINGS }, now().toISOString());
+      return this.load();
     },
 
     /** Registra un movimiento si cumple las reglas. Con tarjeta, completa su sobre de reserva. */

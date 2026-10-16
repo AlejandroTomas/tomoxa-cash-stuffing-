@@ -13,6 +13,7 @@ import { selectLedgerHealth } from "@/features/ledger/selector";
 import { useAppSelector } from "@/hooks/useReduxHooks";
 import type { MovementDraft } from "@/features/ledger/domain/validation";
 import { showDialog } from "@/utils/dialogService";
+import type { EnvelopeDocument } from "../domain/document";
 import type { EnvelopeItem } from "../domain/envelopeView";
 import { swipeHint } from "../domain/gestures";
 import type { OrganizerView } from "../domain/organizerView";
@@ -63,7 +64,7 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, envelopes, activityFor, checkDraft, moveMoney, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+  const { view, selectedId, envelopes, activityFor, checkDraft, moveMoney, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
     useOrganizerController();
   const reduceMotion = useReducedMotion();
   const sceneRef = useRef<HTMLElement>(null);
@@ -102,6 +103,18 @@ export function OrganizerExperience() {
     const name = (id?: string) => envelopes.find((envelope) => envelope.id === id)?.name ?? "";
     toast.success(`Moviste ${formatAmount(draft.amountMinor / 100)} de ${name(draft.envelopeId)} a ${name(draft.toEnvelopeId)}.`);
   };
+
+  const onCancelDocument = (document: EnvelopeDocument) =>
+    showDialog({
+      type: "question",
+      title: "¿Cancelar este movimiento?",
+      message: `${document.concept} (${formatAmount(document.amountMinor / 100)}). Se registra una cancelación con fecha de hoy y los saldos vuelven a como estaban; el original queda en el historial.`,
+      confirmText: "Cancelar movimiento",
+      cancelText: "No",
+      onConfirm: () => {
+        void cancelMovement(document.movementId).then((ok) => ok && toast.success(`Cancelado: ${document.concept}.`));
+      },
+    });
 
   const onArchive = (target: EnvelopeItem) =>
     showDialog({
@@ -225,6 +238,7 @@ export function OrganizerExperience() {
                   onReturnDocument={() => void perform({ type: "RETURN_DOCUMENT" })}
                   onStepDocument={stepDocument}
                   onCloseEnvelope={() => void perform({ type: "CLOSE_ENVELOPE" })}
+                  onCancelMovement={onCancelDocument}
                 />
               </motion.div>
             ) : (
@@ -275,6 +289,8 @@ export function OrganizerExperience() {
         onOpenChange={(open) => setDialog(open ? "accounts" : null)}
         onPayCard={() => openRecord({ kind: "cardPayment" })}
         onCover={openCover}
+        onCancelMovement={cancelMovement}
+        onBeforeReplace={settleBinder}
       />
       <EditEnvelopeDialog
         open={dialog === "edit" || dialog === "create"}

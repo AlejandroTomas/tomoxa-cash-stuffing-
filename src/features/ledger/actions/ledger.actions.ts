@@ -1,4 +1,5 @@
 import { createAsyncThunkWithErrorHandling } from "@/store/utils/createAsyncThunkWithErrorHandling";
+import type { LedgerBackup } from "../domain/backup";
 import type { Account, CardSettings, Envelope, LedgerSettings, Movement } from "../domain/types";
 import type { MovementDraft } from "../domain/validation";
 import type { LedgerData } from "../repositories/ledger.repository";
@@ -9,6 +10,12 @@ import { ledgerService } from "../services/ledger.service";
  * módulos los importan desde `ledgerSlice`, que los reexporta.
  */
 export const loadLedger = createAsyncThunkWithErrorHandling<LedgerData>("ledger/load", () => ledgerService.load());
+
+export const exportLedger = createAsyncThunkWithErrorHandling<LedgerBackup>("ledger/export", () => ledgerService.exportBackup());
+
+export const importLedger = createAsyncThunkWithErrorHandling<LedgerData, string>("ledger/import", (text) => ledgerService.importBackup(text));
+
+export const resetLedger = createAsyncThunkWithErrorHandling<LedgerData>("ledger/reset", () => ledgerService.resetToSample());
 
 export const recordMovement = createAsyncThunkWithErrorHandling<Movement, MovementDraft>("ledger/record", (draft) => ledgerService.record(draft));
 

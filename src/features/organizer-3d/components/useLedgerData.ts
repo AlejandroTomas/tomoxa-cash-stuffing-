@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
-import { archiveEnvelope, loadLedger, recordMovement, saveEnvelope } from "@/features/ledger/ledgerSlice";
+import { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope } from "@/features/ledger/ledgerSlice";
 import { selectAccounts, selectActiveEnvelopes, selectBalances, selectEnvelopes, selectLedgerLoaded, selectMovements } from "@/features/ledger/selector";
 import { checkMovement, type MovementDraft } from "@/features/ledger/domain/validation";
 import type { Envelope } from "@/features/ledger/domain/types";
 import { useAppDispatch, useAppSelector } from "@/hooks/useReduxHooks";
+import { toLocalIsoDate } from "@/utils/localDate";
 import { documentsFromLedger, summarizeActivity } from "../domain/document";
 import { toneFor, type EnvelopeStyle } from "../domain/envelopeStyle";
 import { toEnvelopeItem, type EnvelopeId, type EnvelopeItem } from "../domain/envelopeView";
@@ -69,5 +70,8 @@ export function useLedgerData() {
 
   const archive = useCallback((id: EnvelopeId) => dispatch(archiveEnvelope(id)).unwrap(), [dispatch]);
 
-  return { loaded, envelopes, balanceOf, documentsFor, activityFor, checkDraft, record, withStyle, saveStyle, createEnvelope, archive };
+  /** Cancela un movimiento (registra su inverso con fecha de hoy). */
+  const cancel = useCallback((movementId: string) => dispatch(cancelMovement({ movementId, date: toLocalIsoDate(new Date()) })).unwrap(), [dispatch]);
+
+  return { loaded, envelopes, balanceOf, documentsFor, activityFor, checkDraft, record, withStyle, saveStyle, createEnvelope, archive, cancel };
 }

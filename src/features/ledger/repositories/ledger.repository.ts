@@ -12,7 +12,8 @@ export interface LedgerData {
 /**
  * Acceso al libro en el dispositivo. Solo lectura y escritura: las reglas
  * viven en el servicio. Los movimientos solo se agregan (nunca se editan ni
- * se borran); corregir es agregar una cancelación.
+ * se borran); corregir es agregar una cancelación. `replaceAll` es la única
+ * excepción: importar un respaldo o restablecer los datos de ejemplo.
  */
 export function createLedgerRepository(database: () => LedgerDatabase = ledgerDatabase) {
   return {
@@ -36,6 +37,19 @@ export function createLedgerRepository(database: () => LedgerDatabase = ledgerDa
     async seed(data: Omit<LedgerData, "settings"> & { settings: LedgerSettings }, at: string): Promise<void> {
       const db = database();
       await db.transaction("rw", [db.accounts, db.envelopes, db.movements, db.meta], async () => {
+        await db.accounts.bulkPut(data.accounts);
+        await db.envelopes.bulkPut(data.envelopes);
+        await db.movements.bulkPut(data.movements);
+        await db.meta.put({ key: "settings", value: data.settings });
+        await db.meta.put({ key: "seededAt", value: at });
+      });
+    },
+
+    /** Reemplaza todo el libro (importar o restablecer). Todo o nada. */
+    async replaceAll(data: Omit<LedgerData, "settings"> & { settings: LedgerSettings }, at: string): Promise<void> {
+      const db = database();
+      await db.transaction("rw", [db.accounts, db.envelopes, db.movements, db.meta], async () => {
+        await Promise.all([db.accounts.clear(), db.envelopes.clear(), db.movements.clear(), db.meta.clear()]);
         await db.accounts.bulkPut(data.accounts);
         await db.envelopes.bulkPut(data.envelopes);
         await db.movements.bulkPut(data.movements);

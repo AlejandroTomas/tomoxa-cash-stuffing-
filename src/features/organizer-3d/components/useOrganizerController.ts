@@ -21,7 +21,7 @@ export const DEFAULT_ENVELOPE: EnvelopeId = "card";
  */
 export function useOrganizerController() {
   const ledger = useLedgerData();
-  const { envelopes, documentsFor, withStyle } = ledger;
+  const { envelopes, documentsFor, withStyle, cancel } = ledger;
   const [view, setView] = useState<OrganizerView>(initialView);
   const [chosenId, setSelectedId] = useState<EnvelopeId>(DEFAULT_ENVELOPE);
   const [busy, setBusy] = useState(false);
@@ -150,6 +150,41 @@ export function useOrganizerController() {
       if (next) void selectEnvelope(next);
     },
     [selectEnvelope],
+  );
+
+  /** Guarda los documentos (si el sobre está abierto) sin regresar el sobre. */
+  const closeDocuments = useCallback(async () => {
+    if (viewRef.current.stage === "reading") await perform({ type: "RETURN_DOCUMENT" });
+    if (viewRef.current.stage === "browsing") await perform({ type: "CLOSE_ENVELOPE" });
+  }, [perform]);
+
+  // Tras cancelar un movimiento con el sobre abierto, se vuelve a abrir con sus documentos ya actualizados.
+  const reopenRef = useRef(false);
+  useEffect(() => {
+    if (!reopenRef.current || viewRef.current.stage !== "extracted") return;
+    reopenRef.current = false;
+    void perform({ type: "OPEN_ENVELOPE" });
+  }, [documents, perform]);
+
+  /** Cancela un movimiento. Si el sobre estaba abierto, lo cierra, cancela y lo vuelve a abrir. */
+  const cancelMovement = useCallback(
+    async (movementId: string): Promise<boolean> => {
+      if (busyRef.current) return false;
+      const wasOpen = viewRef.current.stage === "browsing" || viewRef.current.stage === "reading";
+      await closeDocuments();
+      // Se marca antes: los documentos cambian en cuanto el libro se actualiza, antes de que termine la promesa.
+      reopenRef.current = wasOpen;
+      try {
+        await cancel(movementId);
+      } catch (error) {
+        reopenRef.current = false;
+        // El error del thunk ya se mostró en las alertas.
+        reportError(error, { context: "organizer3d.cancelMovement" });
+        return false;
+      }
+      return true;
+    },
+    [closeDocuments, cancel],
   );
 
   /** Ejecuta `task` con la interfaz bloqueada (animaciones + guardado). */
@@ -331,6 +366,8 @@ export function useOrganizerController() {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("input, textarea, select, [role='dialog'], [contenteditable='true']")) return;
+      // Con un diálogo u hoja abiertos, Escape es para cerrarlos (aunque el foco haya quedado en la página).
+      if (document.querySelector("[role='dialog'][data-state='open'], [role='alertdialog'][data-state='open']")) return;
       if (event.key === "Escape") {
         back();
         return;
@@ -357,6 +394,9 @@ export function useOrganizerController() {
     activityFor: ledger.activityFor,
     checkDraft: ledger.checkDraft,
     moveMoney,
+    cancelMovement,
+    closeDocuments,
+    settleBinder,
     previewStyle,
     commitStyle,
     createEnvelope,

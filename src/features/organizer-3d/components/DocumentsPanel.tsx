@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Search, Undo2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -56,6 +56,8 @@ interface DocumentsPanelProps {
   onReturnDocument: () => void;
   onStepDocument: (direction: -1 | 1) => void;
   onCloseEnvelope: () => void;
+  /** Cancelar el movimiento del documento que está fuera (pide confirmación afuera). */
+  onCancelMovement?: (document: EnvelopeDocument) => void;
   /** "Hoy" para los accesos rápidos (inyectable). */
   today?: Date;
 }
@@ -64,7 +66,7 @@ const chip =
   "h-8 rounded-full border border-card/70 bg-card/70 px-3 text-xs font-medium text-foreground/80 outline-none transition-colors hover:bg-card focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:border-primary/40 aria-pressed:bg-primary/15 aria-pressed:text-foreground";
 
 /** Documentos del sobre abierto: búsqueda con frase en caligrafía, lista y el documento que está fuera. */
-export function DocumentsPanel({ item, stage, busy, documents, visible, documentId, filter, onFilter, onPick, onReturnDocument, onStepDocument, onCloseEnvelope, today = new Date() }: DocumentsPanelProps) {
+export function DocumentsPanel({ item, stage, busy, documents, visible, documentId, filter, onFilter, onPick, onReturnDocument, onStepDocument, onCloseEnvelope, onCancelMovement, today = new Date() }: DocumentsPanelProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const latest = documents[0]?.date ?? toLocalIsoDate(today);
@@ -241,6 +243,11 @@ export function DocumentsPanel({ item, stage, busy, documents, visible, document
                 <ChevronRight />
               </Button>
             </div>
+            {onCancelMovement && (
+              <Button variant="ghost" size="sm" disabled={busy} onClick={() => onCancelMovement(picked)} className="mt-2 w-full rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive">
+                <Undo2 /> Cancelar movimiento
+              </Button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
