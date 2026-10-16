@@ -3,6 +3,7 @@ import { checkSettings } from "./cards";
 import type { Account, Envelope, LedgerSettings, Movement } from "./types";
 import { checkMovement } from "./validation";
 
+/** Identificador del formato (no cambia con el nombre de la app: así los respaldos viejos siguen sirviendo). */
 export const BACKUP_APP = "aurora-ledger";
 export const BACKUP_VERSION = 1;
 
@@ -81,8 +82,8 @@ export function createBackup(contents: BackupContents, exportedAt: string): Ledg
   return { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt, ...contents };
 }
 
-/** Nombre del archivo: "aurora-respaldo-2026-10-16.json". */
-export const backupFileName = (date: string) => `aurora-respaldo-${date}.json`;
+/** Nombre del archivo: "ahorroxa-respaldo-2026-10-16.json". */
+export const backupFileName = (date: string) => `ahorroxa-respaldo-${date}.json`;
 
 const duplicated = (items: readonly { id: string }[]) => items.length !== new Set(items.map((item) => item.id)).size;
 
@@ -101,7 +102,7 @@ export function parseBackup(text: string): { contents: BackupContents } | { mess
   const parsed = backupSchema.safeParse(raw);
   if (!parsed.success) {
     const app = typeof raw === "object" && raw !== null && "app" in raw ? (raw as { app: unknown }).app : null;
-    return { message: app === BACKUP_APP ? "El respaldo está dañado o es de una versión que no se reconoce." : "Ese archivo no es un respaldo de Aurora." };
+    return { message: app === BACKUP_APP ? "El respaldo está dañado o es de una versión que no se reconoce." : "Ese archivo no es un respaldo de Ahorroxa." };
   }
   const { accounts, envelopes, movements, settings } = parsed.data;
   if (duplicated(accounts) || duplicated(envelopes) || duplicated(movements)) return { message: "El respaldo tiene registros repetidos." };

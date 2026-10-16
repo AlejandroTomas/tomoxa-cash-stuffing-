@@ -12,5 +12,5 @@ persona nueva) debe leer antes de cambiar algo. El punto de entrada es
   criterio de aceptación. Se borran al terminarlas; lo que valga como regla se
   muda a `context/`.
 
-Las guías de cada pieza viven junto a su código: `core/sync/README.md`,
-`core/toast/README.md`, `features/_example/README.md`.
+Las guías de cada pieza viven junto a su código: `core/toast/README.md`,
+`features/ledger/README.md`, `features/organizer-3d/README.md`.

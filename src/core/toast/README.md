@@ -26,7 +26,7 @@ alertService.reportErrors("Importación", rowErrors);   // lote: repetidos ×N
 alertService.warning("Inventario", "Quedan 3 piezas."); // mensaje propio
 ```
 
-Ejemplos vivos en `/showcase`.
+Se usan en el organizador (`features/organizer-3d`) y en el libro (`features/ledger`).
 
 ## Archivos
 

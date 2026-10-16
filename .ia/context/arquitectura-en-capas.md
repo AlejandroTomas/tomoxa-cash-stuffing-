@@ -1,8 +1,6 @@
 # La arquitectura en una página
 
-El estándar de capas que comparten los proyectos de esta plantilla. Sale de lo
-que se probó en `test-209` (migración de un sistema grande) y `aurora-timer`
-(backend propio), aterrizado en **Next 16 con App Router**.
+El estándar de capas de Ahorroxa, aterrizado en **Next 16 con App Router**.
 
 ## El mapa
 
@@ -11,7 +9,7 @@ src/app/              Rutas. Las páginas son delgadas: montan el componente del
 src/app/api/**        El backend (Route Handlers): validan, llaman al dominio, responden ApiResult.
 src/features/<x>/     Un dominio del negocio. Todo lo de ese dominio vive aquí.
 src/components/       UI sin dominio (ui/ = primitivas de shadcn).
-src/core/             Infraestructura: errors, logger, env, http, session, toast, alert, sync.
+src/core/             Infraestructura: errors, logger, env, http (servidor), toast, alert.
 src/store/            Store de Redux: loadingSlice, wrapper de thunks, middleware de errores.
 src/hooks/            Hooks sin dominio.
 src/utils/            Funciones puras sin dominio ni I/O.
@@ -21,11 +19,11 @@ src/lib/utils.ts      Solo `cn()` (shadcn lo espera ahí).
 
 ## Las capas de un feature
 
-Referencia viva: `src/features/_example/` (y su README).
+Referencia viva: `src/features/ledger/` (y su README).
 
 ```
 features/orders/
-├── repositories/   Habla con el mundo exterior (core/http, outbox). Nada más.
+├── repositories/   Habla con el mundo exterior (IndexedDB con Dexie, o una API). Nada más.
 ├── services/       Reglas de negocio. Valida, decide, orquesta repositorios.
 ├── actions/        Thunks delgados: llaman a UN método del service.
 ├── domain/         Cálculo puro sobre datos en memoria.
@@ -52,7 +50,7 @@ sabe que existe React; `core/` no conoce a nadie de arriba.
 
 | Capa | Va | No va |
 |---|---|---|
-| **repositories/** | `http.get/post/…` de `@/core/http`, `outbox.create(…)`. Un método por consulta, con nombre de negocio. | Un `if` de negocio, un toast, un try/catch. |
+| **repositories/** | Lecturas y escrituras en Dexie (o en una API si algún día la hay). Un método por consulta, con nombre de negocio. | Un `if` de negocio, un toast, un try/catch. |
 | **services/** | Validar, decidir, orquestar repositorios, lanzar el error tipado. | Acceso a datos crudo. React. `showToast`. |
 | **actions/** | `createAsyncThunkWithErrorHandling` que llama a un service. | Lógica, try/catch, UI. |
 | **domain/** | Funciones puras: totales, validaciones, agrupaciones. | I/O, async. |

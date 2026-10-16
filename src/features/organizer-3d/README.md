@@ -1,4 +1,4 @@
-# organizer-3d — Aurora Organizer
+# organizer-3d — Ahorroxa
 
 Página de inicio (`/`; `/organizer` redirige ahí): un organizador 3D con sobres
 extraíbles (hasta 8) y una interfaz de vidrio encima. Tres estilos, con los mismos
@@ -179,7 +179,7 @@ hecho solo con CSS (degradados, bokeh, planta y bowl). Para cambiarla: misma rut
 
 `public/assets/organizer/textures/`: `leather_{normal,roughness}.png`,
 `plastic_normal.png`, `paper_basecolor.png` (512×512, originales del starter
-de Aurora Organizer). La cajonera y el archivador reutilizan estas mismas
+del organizador). La cajonera y el archivador reutilizan estas mismas
 texturas (grano del cuero, micro-relieve del plástico, papel) y materiales
 procedurales (acrílico, laca, metal champán); etiquetas en canvas.
 

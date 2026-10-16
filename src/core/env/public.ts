@@ -11,7 +11,6 @@ export const publicEnv = parseEnv(
   publicSchema,
   {
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
-    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
   },
   "públicas",
 );

@@ -62,7 +62,7 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
 }
 
 /**
- * Aurora Organizer: carpeta 3D a pantalla completa con la interfaz de vidrio
+ * Ahorroxa: organizador 3D (carpeta, cajonera o archivador) a pantalla completa con la interfaz de vidrio
  * encima (navegación, detalle del sobre, fila de sobres). Los saldos y
  * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */

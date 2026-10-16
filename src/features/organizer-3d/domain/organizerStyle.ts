@@ -20,6 +20,7 @@ export const ORGANIZER_STYLES: readonly OrganizerStyleInfo[] = [
 export const DEFAULT_ORGANIZER_STYLE: OrganizerStyleId = "binder";
 
 /** Clave en el navegador (preferencia de quien mira; no son datos del libro). */
+/** Clave en el navegador (no se renombra: se perdería el estilo que cada quien eligió). */
 export const ORGANIZER_STYLE_STORAGE_KEY = "aurora.organizer-style";
 
 export const isOrganizerStyle = (value: unknown): value is OrganizerStyleId => ORGANIZER_STYLES.some((style) => style.id === value);

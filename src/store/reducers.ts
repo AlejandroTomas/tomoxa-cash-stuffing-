@@ -1,7 +1,5 @@
 import { combineReducers } from "@reduxjs/toolkit";
-import { createReducer } from "async-selector-kit";
 
-import exampleTasksReducer from "@/features/_example/exampleTasksSlice";
 import ledgerReducer from "@/features/ledger/ledgerSlice";
 import loadingReducer from "./loadingSlice";
 
@@ -13,10 +11,6 @@ import loadingReducer from "./loadingSlice";
 export const reducers = combineReducers({
   /** Estado de carga de todos los thunks. Ver `loadingSlice.ts`. */
   loading: loadingReducer,
-  /** Caché de `components/form/AsyncSelect`. Bórralo si no usas ese componente. */
-  AsyncSelector: createReducer(),
-  /** Feature de ejemplo: bórralo junto con `features/_example`. */
-  exampleTasks: exampleTasksReducer,
   /** Libro de movimientos (organizador de sobres). */
   ledger: ledgerReducer,
 });

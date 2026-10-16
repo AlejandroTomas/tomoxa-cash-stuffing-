@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     default: publicEnv.NEXT_PUBLIC_APP_NAME,
     template: `%s · ${publicEnv.NEXT_PUBLIC_APP_NAME}`,
   },
-  description: "Plantilla Next.js con arquitectura por capas",
+  description: "Tus sobres de dinero en un organizador 3D: carpeta, cajonera o archivador.",
 };
 
 export default function RootLayout({

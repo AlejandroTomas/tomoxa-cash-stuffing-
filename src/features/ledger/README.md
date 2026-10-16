@@ -2,8 +2,8 @@
 
 Cuentas (dónde está el dinero), sobres (para qué está apartado) y movimientos
 inmutables. Los saldos **nunca se guardan**: se calculan con `computeBalances`.
-Todo vive en IndexedDB (Dexie, base `aurora-ledger`); no hay servidor (se podría
-sincronizar después con `core/sync`). Los sobres no se borran: se archivan.
+Todo vive en IndexedDB (Dexie, base `aurora-ledger`: nombre interno que no se
+renombra para no perder datos); no hay servidor. Los sobres no se borran: se archivan.
 
 ## Modelo de dinero
 

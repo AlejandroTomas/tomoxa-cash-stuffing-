@@ -17,7 +17,7 @@ const FEATURE_PRIVATE = {
 
 /** Acceso a datos crudo: solo desde repositories/ (o un archivo de datos, nunca un componente). */
 const HTTP_CLIENT = {
-  group: ["@/core/http", "axios"],
+  group: ["@/core/http"],
   message: "Un componente/hook no toca datos: llama a un service (o a un thunk) y el repository usa core/http.",
 };
 

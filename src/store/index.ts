@@ -8,7 +8,6 @@ import { reducers } from "./reducers";
 /** Prefijo de módulo del `typePrefix` → título del aviso de error. */
 const MODULE_TITLES: Record<string, string> = {
   // orders: "Pedidos",
-  exampleTasks: "Tareas (ejemplo)", // bórralo junto con features/_example
   ledger: "Sobres",
 };
 

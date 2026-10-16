@@ -6,7 +6,7 @@ import { AlertTriangle, Landmark, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useIsClient } from "@/hooks/useIsClient";
 import { cn } from "@/lib/utils";
-import { AuroraMark } from "./AuroraMark";
+import { AhorroxaMark } from "./AhorroxaMark";
 
 const LINKS = [
   { label: "Inicio", href: "/" },
@@ -36,9 +36,10 @@ export function OrganizerNav({ onAccounts, alert, center }: OrganizerNavProps) {
         className="flex h-16 items-center gap-4 rounded-full border border-card/60 bg-card/55 pr-3 pl-5 shadow-lg shadow-foreground/5 backdrop-blur-xl lg:h-[4.5rem] lg:gap-10 lg:pr-4 lg:pl-8"
       >
         <Link href="/" className="flex shrink-0 items-center gap-3 rounded-full text-lg font-medium tracking-tight text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:text-[1.65rem]">
-          <AuroraMark className="size-7 lg:size-9" />
-          <span>
-            Aurora<span className="hidden sm:inline"> Organizer</span>
+          <AhorroxaMark className="size-8 lg:size-10" />
+          <span className="flex items-baseline gap-2">
+            Ahorroxa
+            <span className="hidden text-xs font-normal tracking-normal text-muted-foreground sm:inline lg:text-sm">de Tomoxa</span>
           </span>
         </Link>
         <ul className="hidden items-center gap-12 text-[0.95rem] text-foreground/80 xl:flex">

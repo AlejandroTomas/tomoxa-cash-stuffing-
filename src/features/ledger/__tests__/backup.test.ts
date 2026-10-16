@@ -20,12 +20,12 @@ describe("parseBackup", () => {
   it("acepta los datos de ejemplo", () => {
     const result = parseBackup(JSON.stringify(sample()));
     expect("contents" in result && result.contents.movements).toHaveLength(seedMovements().length);
-    expect(backupFileName("2026-10-16")).toBe("aurora-respaldo-2026-10-16.json");
+    expect(backupFileName("2026-10-16")).toBe("ahorroxa-respaldo-2026-10-16.json");
   });
 
   it("rechaza lo que no es un respaldo", () => {
     expect(parseBackup("hola")).toEqual({ message: expect.stringContaining("no es JSON") });
-    expect(parseBackup(JSON.stringify({ app: "otra" }))).toEqual({ message: "Ese archivo no es un respaldo de Aurora." });
+    expect(parseBackup(JSON.stringify({ app: "otra" }))).toEqual({ message: "Ese archivo no es un respaldo de Ahorroxa." });
     expect(parseBackup(JSON.stringify({ ...sample(), version: 9 }))).toEqual({ message: expect.stringContaining("versión") });
   });
 

@@ -1,8 +1,8 @@
 # El sistema de diseño
 
-**Es la especificación, no inspiración.** Describe lo que la plantilla ya tiene;
-todo proyecto que salga de aquí lo conserva (los colores de marca se cambian en
-los tokens, no componente por componente).
+**Es la especificación, no inspiración.** Describe lo que la app ya tiene (los
+colores de marca se cambian en los tokens, no componente por componente; la
+marca a color vive en `app/icon.svg` y `AhorroxaMark`).
 
 ## Fundamento
 
@@ -54,27 +54,18 @@ Un solo origen: `--radius: 0.625rem` (10px). `rounded-sm` 6 · `rounded-md` 8 ·
 - Título de página: `text-xl font-bold text-foreground`. Subtítulo: `text-sm text-muted-foreground`.
 - Jerarquía secundaria: baja a `muted-foreground` o al peso; no inventes grises.
 - **`tabular-nums`** en números que deben alinearse en columna (tablas, montos
-  apilados, horas). Un número grande y suelto (el valor de un `StatTile`) va con
+  apilados, horas). Un número grande y suelto (un saldo, por ejemplo) va con
   cifras proporcionales: `tabular-nums` lo hace ver separado.
 
 ## Piezas ya construidas: úsalas, no las reinventes
 
 | Necesidad | Usa |
 |---|---|
-| Marco de página (título, icono, acciones) | `components/layouts/PageScaffold` |
-| Layout con menú lateral | `components/layouts/AdminLayout` + `Sidebar` |
-| Tabla con búsqueda/filtros/orden/paginación | `components/compound/PaginatedTable` |
-| Barra de filtros (para tabla o API) | `components/filters/FilterBar` |
 | Aviso breve | `toast` de `@/core/toast` |
 | Error o resultado que hay que leer y cerrar | `alertService` de `@/core/alert` |
 | Confirmación | `showDialog()` de `utils/dialogService` |
 | Diálogo que en móvil es hoja inferior | `components/ui/responsive-dialog` (`Credenza*`) |
-| Agrupar campos de un formulario | `components/form/FormSection` |
-| KPI con variación | `components/shared/StatTile` |
-| Importar Excel | `components/import/ExcelImportModal` |
-| Estado del outbox | `components/feedback/OutboxStatusPanel` |
 
-Todas tienen ejemplo vivo en `/showcase`.
 
 ## Accesibilidad mínima
 

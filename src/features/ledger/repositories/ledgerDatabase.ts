@@ -28,6 +28,7 @@ export class LedgerDatabase extends Dexie {
   }
 }
 
+/** Nombre de la base en el dispositivo. No se renombra: cambiarlo dejaría atrás los datos guardados. */
 export const LEDGER_DB_NAME = "aurora-ledger";
 
 let instance: LedgerDatabase | null = null;

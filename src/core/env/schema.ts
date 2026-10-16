@@ -9,9 +9,7 @@ import { z } from "zod";
  * - `serverSchema`: secretos y configuración solo de servidor.
  */
 export const publicSchema = z.object({
-  NEXT_PUBLIC_APP_NAME: z.string().min(1).default("Aurora"),
-  /** Vacío = mismo origen (las rutas `/api/**` de esta misma app). */
-  NEXT_PUBLIC_API_BASE_URL: z.union([z.literal(""), z.url()]).default(""),
+  NEXT_PUBLIC_APP_NAME: z.string().min(1).default("Ahorroxa"),
 });
 
 export const serverSchema = z.object({
