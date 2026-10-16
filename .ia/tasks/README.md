@@ -9,7 +9,5 @@ mueve a `../context/`).
 
 - [tokens-de-color.md](./tokens-de-color.md) — pasar a tokens los colores fijos
   que quedan en componentes heredados.
-- [sobre-documentos-y-busqueda.md](./sobre-documentos-y-busqueda.md) — abrir un
-  sobre, ver sus documentos y filtrarlos con escritura a mano.
 - [fase-2-libro-de-movimientos.md](./fase-2-libro-de-movimientos.md) — datos
   reales en el dispositivo: cuentas, sobres y movimientos con saldos derivados.

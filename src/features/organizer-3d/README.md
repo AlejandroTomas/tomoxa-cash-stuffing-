@@ -1,8 +1,7 @@
-# organizer-3d — Aurora Organizer (fase 01, solo visual)
+# organizer-3d — Aurora Organizer
 
 Página de inicio (`/`; `/organizer` redirige ahí): carpeta de cuero sintético en
-3D con seis sobres plásticos extraíbles y una interfaz de vidrio encima, según
-`aurora-organizer-3d/public/assets/reference/aurora-concept.png`.
+3D con sobres plásticos extraíbles (hasta 8) y una interfaz de vidrio encima.
 Los saldos, movimientos y sobres vienen del **libro de movimientos**
 (`features/ledger`), guardado en el dispositivo. El organizador solo los muestra y
 anima; las acciones ("Mover dinero", crear/editar/archivar sobres) pasan por los
@@ -75,7 +74,7 @@ asoman como tickets en abanico (máx. 8; el más reciente al frente). La búsque
 describe (`describeFilter`) se escribe en Caveat en la tarjeta y en una etiqueta de
 papel sobre el sobre. Tocar un ticket (o la lista) lo saca al frente; Escape retrocede
 un nivel. El sobre presentado siempre queda delante de la pila; en pantallas angostas
-se achica en lugar de meterse entre los demás. Spec: `.ia/tasks/sobre-documentos-y-busqueda.md`.
+se achica en lugar de meterse entre los demás.
 
 ## Mover dinero, crear, editar y archivar sobres
 
@@ -114,4 +113,4 @@ hecho solo con CSS (degradados, bokeh, planta y bowl). Para cambiarla: misma rut
 
 `public/assets/organizer/textures/`: `leather_{normal,roughness}.png`,
 `plastic_normal.png`, `paper_basecolor.png` (512×512, originales del starter
-`aurora-organizer-3d`, ver su `docs/ASSETS.md`).
+de Aurora Organizer).
