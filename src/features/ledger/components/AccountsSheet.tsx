@@ -22,7 +22,7 @@ import { paymentDueSoon, type CardSummary } from "../domain/cards";
 import { formatMinor } from "../domain/money";
 import type { Account, Movement } from "../domain/types";
 import { cancelMovement, exportLedger, importLedger, resetLedger, saveCardSettings, saveLedgerSettings } from "../ledgerSlice";
-import { selectAccounts, selectActiveEnvelopes, selectBalances, selectCardSummaries, selectEnvelopes, selectLedgerHealth, selectLedgerSettings, selectMovements } from "../selector";
+import { selectAccounts, selectActiveEnvelopes, selectBalances, selectBudgets, selectCardSummaries, selectEnvelopes, selectLedgerHealth, selectLedgerSettings, selectMovements } from "../selector";
 import { dueText, formatDay, MOVEMENT_LABELS, WEEKDAYS } from "./format";
 
 interface AccountsSheetProps {
@@ -30,8 +30,8 @@ interface AccountsSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Abre el registro con "Pagar tarjeta". */
   onPayCard: () => void;
-  /** Cubrir un sobre sobregirado (mover `amountMinor` hacia él). */
-  onCover: (envelopeId: string, amountMinor: number) => void;
+  /** Cubrir un sobre sobregirado o apartar su presupuesto (mover `amountMinor` hacia él; al apartar, desde Disponible si alcanza). */
+  onCover: (envelopeId: string, amountMinor: number, preferAvailable?: boolean) => void;
   /** Cancela un movimiento (el organizador guarda antes lo que esté abierto). Sin él, se cancela directo. */
   onCancelMovement?: (movementId: string) => Promise<boolean>;
   /** Antes de reemplazar todo el libro (importar o restablecer). */
@@ -92,6 +92,8 @@ function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | 
   const money = accounts.filter((account) => !account.archived && account.kind !== "credit").sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "debit" ? -1 : 1));
   const overdrawn = envelopes.filter((envelope) => (balances.envelopes[envelope.id] ?? 0) < 0);
   const due = cards.filter((card) => paymentDueSoon(card.statement));
+  const budgets = useAppSelector((state) => selectBudgets(state, today));
+  const budgeted = envelopes.filter((envelope) => budgets[envelope.id]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -132,6 +134,37 @@ function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | 
       {cards.map((card) => (
         <CardPanel key={card.account.id} card={card} onPay={onPayCard} />
       ))}
+
+      {budgeted.length > 0 && (
+        <section aria-labelledby="accounts-budgets" className="space-y-2">
+          <h3 id="accounts-budgets" className="text-sm font-medium text-muted-foreground">
+            Presupuestos
+          </h3>
+          <ul className={panel}>
+            {budgeted.map((envelope) => {
+              const budget = budgets[envelope.id];
+              const over = budget.remainingMinor < 0;
+              return (
+                <li key={envelope.id} className="flex items-center gap-3 py-2.5">
+                  <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: envelope.color }} />
+                  <span className="flex-1">
+                    <span className="text-foreground/80">{envelope.name}</span>
+                    <span className={cn("block text-xs tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>
+                      {formatMinor(budget.spentMinor)} de {formatMinor(budget.amountMinor)} {budget.period === "week" ? "esta semana" : "este mes"}
+                      {over && ` · te pasaste por ${formatMinor(-budget.remainingMinor)}`}
+                    </span>
+                  </span>
+                  {budget.toFundMinor > 0 && (
+                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => onCover(envelope.id, budget.toFundMinor, true)}>
+                      Apartar {formatMinor(budget.toFundMinor)}
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {overdrawn.length > 0 && (
         <section aria-labelledby="accounts-overdrawn" className="space-y-2">

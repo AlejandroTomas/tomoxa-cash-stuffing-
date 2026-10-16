@@ -2,6 +2,7 @@ import { createSelector } from "@reduxjs/toolkit";
 
 import type { RootState } from "@/store";
 import { computeBalances, overdrawn, totalCash, unbackedDebt } from "./domain/balances";
+import { budgetStatus, type BudgetStatus } from "./domain/budget";
 import { cardSummaries } from "./domain/cards";
 
 /** Lectores del libro. Todo lo derivado (saldos) se calcula en `domain/`, memorizado. */
@@ -31,4 +32,17 @@ export const selectLedgerHealth = createSelector([selectBalances, selectAccounts
 export const selectCardSummaries = createSelector(
   [selectAccounts, selectBalances, selectMovements, (_state: RootState, today: string) => today],
   (accounts, balances, movements, today) => cardSummaries(accounts, balances, movements, today),
+);
+
+/** Presupuesto de cada sobre activo que lo tiene (id → estado del periodo actual). `today` = "YYYY-MM-DD". */
+export const selectBudgets = createSelector(
+  [selectActiveEnvelopes, selectBalances, selectMovements, selectLedgerSettings, (_state: RootState, today: string) => today],
+  (envelopes, balances, movements, settings, today) => {
+    const budgets: Record<string, BudgetStatus> = {};
+    for (const envelope of envelopes) {
+      const status = budgetStatus(envelope, balances.envelopes[envelope.id] ?? 0, movements, balances.reversed, today, settings.weekStartsOn);
+      if (status) budgets[envelope.id] = status;
+    }
+    return budgets;
+  },
 );

@@ -30,9 +30,15 @@ intereses es lo comprado hasta el último corte menos lo pagado hasta hoy (los
 cancelados no cuentan). La fecha límite es la de ese corte, no la del periodo en
 curso. Se avisa en la nav cuando faltan `PAYMENT_REMINDER_DAYS` (5) días o menos.
 
+**Presupuesto** (`budget`): un sobre puede tener un monto por semana o por mes
+(`envelope.budget`, opcional). `budgetStatus` suma los gastos del sobre en el
+periodo actual (la semana empieza según `weekStartsOn`; con tarjeta también
+cuentan, sin cancelados). Falta apartar = presupuesto − gastado − saldo: el dinero
+que sobró de periodos anteriores cuenta. Es solo un plan: no bloquea gastos.
+
 ```
 domain/        types · balances (saldos, deuda sin respaldo) · validation (reglas) ·
-               envelopes (crear/editar/archivar) · statement (cortes) · seed (datos de ejemplo) ·
+               envelopes (crear/editar/archivar) · budget (presupuesto por periodo) · statement (cortes) · seed (datos de ejemplo) ·
                cards (resumen por tarjeta, ajustes, ingresos del día) · money (montos ↔ texto) ·
                movementForm (formulario de registro → movimiento) · backup (respaldo JSON validado)
 errors/        LedgerRuleError (ValidationError con code y campo)
@@ -40,9 +46,9 @@ repositories/  ledgerDatabase (Dexie, versionada) · ledger.repository (privado)
 services/      ledger.service: load (siembra la 1.ª vez), record, cancel, saveEnvelope, archiveEnvelope,
                saveSettings, saveCardSettings, exportBackup, importBackup, resetToSample
 actions/       thunks "ledger/…" (privados; se importan desde ledgerSlice)
-ledgerSlice.ts · selector.ts   estado y saldos memorizados (selectLedgerHealth, selectCardSummaries)
+ledgerSlice.ts · selector.ts   estado y saldos memorizados (selectLedgerHealth, selectCardSummaries, selectBudgets)
 components/    RecordMovementDialog (gasto, ingreso, pago de tarjeta, depósito/retiro) ·
-               AccountsSheet (cuentas, deuda, sobregirados, movimientos con "cancelar", ajustes y respaldo)
+               AccountsSheet (cuentas, deuda, presupuestos, sobregirados, movimientos con "cancelar", ajustes y respaldo)
 ```
 
 ## Reglas que conviene recordar

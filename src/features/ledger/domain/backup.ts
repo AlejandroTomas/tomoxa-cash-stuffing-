@@ -43,6 +43,7 @@ const envelopeSchema = z.object({
   icon: z.enum(["wallet", "card", "piggy", "banknote", "calendar", "chart"]),
   order: z.number().int(),
   archived: z.boolean(),
+  budget: z.object({ amountMinor: z.number().int().positive(), period: z.enum(["week", "month"]) }).optional(),
 });
 
 const movementSchema = z.object({

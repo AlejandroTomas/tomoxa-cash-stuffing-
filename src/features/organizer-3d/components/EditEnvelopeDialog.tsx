@@ -16,7 +16,17 @@ import {
   CredenzaTitle,
 } from "@/components/ui/responsive-dialog";
 import { cn } from "@/lib/utils";
-import { ENVELOPE_DESCRIPTION_MAX, ENVELOPE_ICON_OPTIONS, ENVELOPE_NAME_MAX, ENVELOPE_PALETTE, envelopeStyleSchema, type EnvelopeStyle } from "../domain/envelopeStyle";
+import {
+  ENVELOPE_DESCRIPTION_MAX,
+  ENVELOPE_ICON_OPTIONS,
+  ENVELOPE_NAME_MAX,
+  ENVELOPE_PALETTE,
+  envelopeFormDefaults,
+  envelopeFormSchema,
+  envelopeFromForm,
+  type EnvelopeForm,
+  type EnvelopeStyle,
+} from "../domain/envelopeStyle";
 import type { EnvelopeItem } from "../domain/envelopeView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
@@ -33,6 +43,12 @@ interface EditEnvelopeDialogProps {
   onSave: (style: EnvelopeStyle) => void;
 }
 
+const BUDGET_OPTIONS: { value: EnvelopeForm["budgetPeriod"]; label: string }[] = [
+  { value: "none", label: "Ninguno" },
+  { value: "week", label: "Semanal" },
+  { value: "month", label: "Mensual" },
+];
+
 const ICON_LABELS: Record<EnvelopeItem["icon"], string> = {
   wallet: "Cartera",
   card: "Tarjeta",
@@ -42,7 +58,7 @@ const ICON_LABELS: Record<EnvelopeItem["icon"], string> = {
   chart: "Gráfica",
 };
 
-/** Crear o editar un sobre (nombre, descripción, color e icono); al editar, vista previa en la carpeta. */
+/** Crear o editar un sobre (nombre, descripción, color, icono y presupuesto); al editar, vista previa en la carpeta. */
 export function EditEnvelopeDialog({ open, onOpenChange, onPreview, ...props }: EditEnvelopeDialogProps) {
   const close = (next: boolean) => {
     if (!next) onPreview(null);
@@ -66,20 +82,20 @@ function EditEnvelopeForm({
   onCancel,
   onSaved,
 }: Omit<EditEnvelopeDialogProps, "open" | "onOpenChange"> & { onCancel: () => void; onSaved: () => void }) {
-  const schema = useMemo(() => envelopeStyleSchema(otherNames), [otherNames]);
+  const schema = useMemo(() => envelopeFormSchema(otherNames), [otherNames]);
   const {
     control,
     register,
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<EnvelopeStyle>({
+  } = useForm<EnvelopeForm>({
     resolver: zodResolver(schema),
-    defaultValues: item
-      ? { name: item.name, description: item.description, color: item.color, icon: item.icon }
-      : { name: "", description: "", color: ENVELOPE_PALETTE.find((swatch) => !usedColors.includes(swatch)) ?? ENVELOPE_PALETTE[0], icon: "wallet" },
+    defaultValues: envelopeFormDefaults(
+      item ?? { name: "", description: "", color: ENVELOPE_PALETTE.find((swatch) => !usedColors.includes(swatch)) ?? ENVELOPE_PALETTE[0], icon: "wallet" },
+    ),
   });
-  const [name, description, color, icon] = useWatch({ control, name: ["name", "description", "color", "icon"] });
+  const [name, description, color, icon, budgetPeriod] = useWatch({ control, name: ["name", "description", "color", "icon", "budgetPeriod"] });
   const previewName = name.trim() || item?.name || "Nuevo sobre";
 
   // La carpeta muestra los cambios mientras se edita.
@@ -93,8 +109,8 @@ function EditEnvelopeForm({
   return (
     <form
       noValidate
-      onSubmit={handleSubmit((style) => {
-        onSave(style);
+      onSubmit={handleSubmit((form) => {
+        onSave(envelopeFromForm(form));
         // Cerrar sin revertir: la carpeta ya tiene el estilo guardado.
         onSaved();
       })}
@@ -210,6 +226,53 @@ function EditEnvelopeForm({
             );
           })}
         </div>
+      </fieldset>
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">Presupuesto</legend>
+        <div role="radiogroup" aria-label="Presupuesto del sobre" className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+          {BUDGET_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={budgetPeriod === option.value}
+              onClick={() => setValue("budgetPeriod", option.value, { shouldValidate: true })}
+              className="rounded-lg px-2 py-1.5 text-sm text-muted-foreground outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-checked:bg-card aria-checked:text-foreground aria-checked:shadow-sm"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {budgetPeriod !== "none" && (
+          <>
+            <div className="relative">
+              <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true">
+                $
+              </span>
+              <Input
+                id="envelope-budget"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0.00"
+                aria-label={budgetPeriod === "week" ? "Cuánto gastar por semana" : "Cuánto gastar por mes"}
+                aria-invalid={Boolean(errors.budgetAmount)}
+                aria-describedby={errors.budgetAmount ? "envelope-budget-error" : "envelope-budget-hint"}
+                className="h-11 rounded-xl pl-7 tabular-nums"
+                {...register("budgetAmount")}
+              />
+            </div>
+            {errors.budgetAmount ? (
+              <p id="envelope-budget-error" className="text-xs text-destructive">
+                {errors.budgetAmount.message}
+              </p>
+            ) : (
+              <p id="envelope-budget-hint" className="text-xs text-muted-foreground">
+                Cuánto piensas gastar de este sobre {budgetPeriod === "week" ? "cada semana" : "cada mes"}.
+              </p>
+            )}
+          </>
+        )}
       </fieldset>
 
       <CredenzaFooter className="gap-2 px-0">

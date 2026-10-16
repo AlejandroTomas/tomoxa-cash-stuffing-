@@ -8,7 +8,7 @@ import { toast } from "@/core/toast";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import { AccountsSheet } from "@/features/ledger/components/AccountsSheet";
 import { RecordMovementDialog, type RecordDefaults } from "@/features/ledger/components/RecordMovementDialog";
-import { MAX_ACTIVE_ENVELOPES } from "@/features/ledger/domain/envelopes";
+import { MAX_ACTIVE_ENVELOPES, UNASSIGNED_ENVELOPE_ID } from "@/features/ledger/domain/envelopes";
 import { paymentDueSoon } from "@/features/ledger/domain/cards";
 import { selectCardSummaries, selectLedgerHealth } from "@/features/ledger/selector";
 import { toLocalIsoDate } from "@/utils/localDate";
@@ -66,7 +66,7 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, envelopes, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+  const { view, selectedId, envelopes, budgets, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
     useOrganizerController();
   const reduceMotion = useReducedMotion();
   const sceneRef = useRef<HTMLElement>(null);
@@ -90,10 +90,13 @@ export function OrganizerExperience() {
     setRecordDefaults(defaults);
     setDialog("record");
   };
-  const openCover = (to: string, amountMinor: number) => {
-    const richest = [...envelopes].filter((envelope) => envelope.id !== to).sort((a, b) => b.amount - a.amount)[0];
-    if (!richest) return;
-    setCover({ from: richest.id, to, amountMinor });
+  /** Propone mover `amountMinor` a `to`: desde Disponible si alcanza (al apartar presupuesto), si no desde el sobre con más dinero. */
+  const openCover = (to: string, amountMinor: number, preferAvailable = false) => {
+    const others = envelopes.filter((envelope) => envelope.id !== to);
+    const available = others.find((envelope) => envelope.id === UNASSIGNED_ENVELOPE_ID && Math.round(envelope.amount * 100) >= amountMinor);
+    const source = (preferAvailable && available) || [...others].sort((a, b) => b.amount - a.amount)[0];
+    if (!source) return;
+    setCover({ from: source.id, to, amountMinor });
     setDialog("move");
   };
   const itemId = item?.id ?? "";
@@ -255,6 +258,8 @@ export function OrganizerExperience() {
                   item={item}
                   envelopes={envelopes}
                   activity={activityFor(item.id)}
+                  budget={budgets[item.id]}
+                  onFund={(amountMinor) => openCover(item.id, amountMinor, true)}
                   onMoveMoney={() => {
                     setCover(null);
                     setDialog("move");

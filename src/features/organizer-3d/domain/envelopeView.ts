@@ -1,4 +1,4 @@
-import type { Envelope, EnvelopeIcon } from "@/features/ledger/domain/types";
+import type { Envelope, EnvelopeBudget, EnvelopeIcon } from "@/features/ledger/domain/types";
 import { toneFor } from "./envelopeStyle";
 
 export type { EnvelopeIcon };
@@ -16,6 +16,7 @@ export interface EnvelopeItem {
   icon: EnvelopeIcon;
   /** Saldo en pesos (de solo lectura: lo calcula el libro). */
   amount: number;
+  budget?: EnvelopeBudget;
 }
 
 export function toEnvelopeItem(envelope: Envelope, balanceMinor: number): EnvelopeItem {
@@ -27,6 +28,7 @@ export function toEnvelopeItem(envelope: Envelope, balanceMinor: number): Envelo
     tone: toneFor(envelope.color),
     icon: envelope.icon,
     amount: balanceMinor / 100,
+    ...(envelope.budget ? { budget: envelope.budget } : {}),
   };
 }
 

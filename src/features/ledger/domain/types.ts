@@ -26,6 +26,14 @@ export interface CardSettings {
 
 export type EnvelopeIcon = "wallet" | "card" | "piggy" | "banknote" | "calendar" | "chart";
 
+export type BudgetPeriod = "week" | "month";
+
+/** Cuánto se piensa gastar de un sobre por semana o por mes. */
+export interface EnvelopeBudget {
+  amountMinor: number;
+  period: BudgetPeriod;
+}
+
 /** Para qué está apartado el dinero. */
 export interface Envelope {
   id: string;
@@ -37,6 +45,8 @@ export interface Envelope {
   order: number;
   /** Archivado: no aparece en la carpeta; su historial se conserva. */
   archived: boolean;
+  /** Presupuesto del sobre (opcional). */
+  budget?: EnvelopeBudget;
 }
 
 export type MovementKind = "income" | "expense" | "assignment" | "accountTransfer" | "cardPayment" | "reversal";

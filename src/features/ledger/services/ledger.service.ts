@@ -72,10 +72,12 @@ export function createLedgerService({ repository, now, newId }: ServiceDeps) {
       return this.record({ kind: "reversal", date, concept: `Cancelación: ${original?.concept ?? "movimiento"}`, amountMinor: original?.amountMinor ?? 0, reversalOf: movementId });
     },
 
-    /** Crea o edita un sobre (nombre único entre los activos, color e icono válidos). */
+    /** Crea o edita un sobre (nombre único entre los activos, color, icono y presupuesto válidos). */
     async saveEnvelope(envelope: Envelope): Promise<Envelope> {
       const data = await repository.loadAll();
-      const clean: Envelope = { ...envelope, name: envelope.name.trim(), description: envelope.description.trim() };
+      // Sin presupuesto, el campo se quita (no queda `budget: undefined` guardado).
+      const { budget, ...rest } = envelope;
+      const clean: Envelope = { ...rest, name: envelope.name.trim(), description: envelope.description.trim(), ...(budget ? { budget } : {}) };
       const issue = checkEnvelope(clean, data.envelopes);
       if (issue) throw new LedgerRuleError(issue);
       const isNew = !data.envelopes.some((existing) => existing.id === clean.id);

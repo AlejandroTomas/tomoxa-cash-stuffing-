@@ -1,4 +1,5 @@
 import type { Balances } from "./balances";
+import { isValidBudget } from "./budget";
 import type { Account, Envelope, EnvelopeIcon } from "./types";
 
 /** Sobre donde entran los ingresos sin asignar; no se archiva. */
@@ -11,8 +12,8 @@ export const ENVELOPE_DESCRIPTION_MAX = 60;
 export const ENVELOPE_ICONS: readonly EnvelopeIcon[] = ["wallet", "card", "piggy", "banknote", "calendar", "chart"];
 
 export interface EnvelopeIssue {
-  code: "INVALID_NAME" | "NAME_TAKEN" | "TOO_MANY" | "INVALID_DESCRIPTION" | "INVALID_COLOR" | "INVALID_ICON" | "PROTECTED" | "NOT_EMPTY";
-  field: "name" | "description" | "color" | "icon" | "form";
+  code: "INVALID_NAME" | "NAME_TAKEN" | "TOO_MANY" | "INVALID_DESCRIPTION" | "INVALID_COLOR" | "INVALID_ICON" | "INVALID_BUDGET" | "PROTECTED" | "NOT_EMPTY";
+  field: "name" | "description" | "color" | "icon" | "budget" | "form";
   message: string;
 }
 
@@ -34,6 +35,7 @@ export function checkEnvelope(envelope: Envelope, envelopes: readonly Envelope[]
   }
   if (!/^#[0-9a-f]{6}$/i.test(envelope.color)) return { code: "INVALID_COLOR", field: "color", message: "Elige un color." };
   if (!ENVELOPE_ICONS.includes(envelope.icon)) return { code: "INVALID_ICON", field: "icon", message: "Elige un icono." };
+  if (envelope.budget && !isValidBudget(envelope.budget)) return { code: "INVALID_BUDGET", field: "budget", message: "Escribe un presupuesto mayor que cero." };
   return null;
 }
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, ArrowLeftRight, FolderOpen, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, FolderOpen, Gauge, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { BUDGET_PERIOD_LABELS, type BudgetStatus } from "@/features/ledger/domain/budget";
 import type { EnvelopeActivity } from "../domain/document";
 import { parseLocalDate } from "@/utils/localDate";
 import type { EnvelopeItem } from "../domain/envelopeView";
@@ -28,6 +29,10 @@ interface EnvelopeDetailCardProps {
   /** Todos los sobres (para el indicador de posición). */
   envelopes: readonly EnvelopeItem[];
   activity: EnvelopeActivity;
+  /** Presupuesto del periodo actual (si el sobre tiene). */
+  budget?: BudgetStatus;
+  /** Propone apartar en el sobre lo que falta para su presupuesto. */
+  onFund: (amountMinor: number) => void;
   onMoveMoney: () => void;
   onRecord: () => void;
   onEdit: () => void;
@@ -46,7 +51,7 @@ interface EnvelopeDetailCardProps {
 export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
 /** Tarjeta de vidrio con el detalle del sobre seleccionado. */
-export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const index = envelopes.findIndex((envelope) => envelope.id === item.id);
@@ -120,6 +125,7 @@ export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onR
               <dt className="flex-1 text-foreground/80">Último movimiento</dt>
               <dd className="font-medium text-foreground tabular-nums">{activity.lastMovement ? formatShortDate(activity.lastMovement) : "—"}</dd>
             </div>
+            {budget && <BudgetRow budget={budget} busy={busy} onFund={onFund} />}
           </dl>
         </motion.div>
       </AnimatePresence>
@@ -173,5 +179,45 @@ export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onR
         </Button>
       </div>
     </section>
+  );
+}
+
+const pesos = (minor: number) => formatAmount(minor / 100);
+
+/** Gastado contra presupuesto en el periodo, con barra y atajo para apartar lo que falta. */
+function BudgetRow({ budget, busy, onFund }: { budget: BudgetStatus; busy: boolean; onFund: (amountMinor: number) => void }) {
+  const over = budget.remainingMinor < 0;
+  const ratio = Math.min(1, budget.spentMinor / budget.amountMinor);
+  return (
+    <div className="py-3">
+      <div className="flex items-center gap-3">
+        <Gauge className="size-4.5 text-muted-foreground" aria-hidden="true" />
+        <dt className="flex-1 text-foreground/80">Presupuesto</dt>
+        <dd className="font-medium text-foreground tabular-nums">
+          {pesos(budget.spentMinor)} <span className="font-normal text-muted-foreground">de {pesos(budget.amountMinor)}</span>
+        </dd>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Gastado del presupuesto"
+        aria-valuemin={0}
+        aria-valuemax={budget.amountMinor / 100}
+        aria-valuenow={Math.min(budget.spentMinor, budget.amountMinor) / 100}
+        className="mt-2 ml-7.5 h-1.5 overflow-hidden rounded-full bg-foreground/10"
+      >
+        <div className={cn("h-full rounded-full transition-[width]", over ? "bg-destructive" : ratio >= 0.85 ? "bg-warning" : "bg-primary")} style={{ width: `${ratio * 100}%` }} />
+      </div>
+      <div className="mt-1.5 ml-7.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+        <span className={cn("tabular-nums", over ? "text-destructive" : "text-muted-foreground")}>
+          {over ? `Te pasaste por ${pesos(-budget.remainingMinor)}` : `Quedan ${pesos(budget.remainingMinor)}`} · {BUDGET_PERIOD_LABELS[budget.period]} hasta el{" "}
+          {formatShortDate(budget.end).replace(/ \d{4}$/, "")}
+        </span>
+        {budget.toFundMinor > 0 && (
+          <button type="button" disabled={busy} onClick={() => onFund(budget.toFundMinor)} className="font-medium text-primary underline-offset-2 hover:underline disabled:opacity-50">
+            Apartar {pesos(budget.toFundMinor)}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

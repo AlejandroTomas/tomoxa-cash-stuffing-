@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { BUDGET_MAX_MINOR } from "@/features/ledger/domain/budget";
+import { minorToInput, parseAmountMinor } from "@/features/ledger/domain/money";
+import type { BudgetPeriod, EnvelopeBudget } from "@/features/ledger/domain/types";
 import type { EnvelopeIcon } from "../domain/envelopeView";
 
 /** Colores de plástico disponibles al editar un sobre (paleta de datos, igual en ambos temas). */
@@ -15,6 +18,8 @@ export interface EnvelopeStyle {
   description: string;
   color: string;
   icon: EnvelopeIcon;
+  /** Al guardar siempre viene (`undefined` = sin presupuesto); la vista previa no lo usa. */
+  budget?: EnvelopeBudget;
 }
 
 /** Esquema del formulario "Editar sobre". `otherNames`: los demás sobres (no se repiten nombres). */
@@ -31,6 +36,37 @@ export function envelopeStyleSchema(otherNames: readonly string[]) {
     color: z.string().refine((color) => (ENVELOPE_PALETTE as readonly string[]).includes(color), "Elige un color."),
     icon: z.enum(ENVELOPE_ICON_OPTIONS as [EnvelopeIcon, ...EnvelopeIcon[]], { message: "Elige un icono." }),
   });
+}
+
+/** Formulario "Editar sobre": el estilo más el presupuesto (el monto llega como texto). */
+export interface EnvelopeForm extends Omit<EnvelopeStyle, "budget"> {
+  budgetPeriod: BudgetPeriod | "none";
+  budgetAmount: string;
+}
+
+export function envelopeFormSchema(otherNames: readonly string[]) {
+  return envelopeStyleSchema(otherNames)
+    .extend({ budgetPeriod: z.enum(["none", "week", "month"]), budgetAmount: z.string() })
+    .superRefine((form, ctx) => {
+      if (form.budgetPeriod === "none") return;
+      const amount = parseAmountMinor(form.budgetAmount);
+      if (amount === null || amount > BUDGET_MAX_MINOR) ctx.addIssue({ code: "custom", path: ["budgetAmount"], message: "Escribe cuánto piensas gastar." });
+    });
+}
+
+export const envelopeFormDefaults = (style: EnvelopeStyle): EnvelopeForm => ({
+  name: style.name,
+  description: style.description,
+  color: style.color,
+  icon: style.icon,
+  budgetPeriod: style.budget?.period ?? "none",
+  budgetAmount: style.budget ? minorToInput(style.budget.amountMinor) : "",
+});
+
+/** Formulario ya validado → estilo a guardar (con `budget` explícito para poder quitarlo). */
+export function envelopeFromForm({ budgetPeriod, budgetAmount, ...style }: EnvelopeForm): EnvelopeStyle {
+  const amountMinor = parseAmountMinor(budgetAmount);
+  return { ...style, budget: budgetPeriod === "none" || amountMinor === null ? undefined : { amountMinor, period: budgetPeriod } };
 }
 
 /** Tono claro del papel dentro del sobre: el color mezclado con blanco. */

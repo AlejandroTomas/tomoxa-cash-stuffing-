@@ -83,7 +83,9 @@ se achica en lugar de meterse entre los demás.
 movimiento se guarda. Crear y archivar reacomodan la carpeta (`setEnvelopes` de la
 escena: los nuevos crecen en su lugar, los archivados se encogen; caben 8 activos).
 Archivar pide confirmación y solo aplica a sobres vacíos. Editar muestra la vista
-previa en vivo y guarda nombre, descripción, color e icono.
+previa en vivo y guarda nombre, descripción, color, icono y presupuesto (semanal o
+mensual). Con presupuesto, el detalle muestra lo gastado en el periodo y el atajo
+"Apartar" abre Mover con lo que falta, desde Disponible si alcanza.
 
 Al registrar un movimiento (botón "Registrar") las fichas también se animan, según
 `moneyFlowOf`: el ingreso llega de fuera a su sobre, el gasto sale, la compra con

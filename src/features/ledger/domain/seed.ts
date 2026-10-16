@@ -19,8 +19,8 @@ export const SEED_ENVELOPES: Envelope[] = [
   { id: "available", name: "Disponible", description: "Dinero sin asignar, listo para repartir", color: "#7f9fe6", icon: "wallet", order: 0, archived: false },
   { id: "card", name: "Tarjeta", description: "Dinero apartado para tu tarjeta de crédito", color: "#ee8586", icon: "card", order: 1, archived: false },
   { id: "savings", name: "Ahorro", description: "Tu meta de ahorro del mes", color: "#7cc3a3", icon: "piggy", order: 2, archived: false },
-  { id: "cash", name: "Efectivo", description: "Billetes para gastos del día a día", color: "#ecb46c", icon: "banknote", order: 3, archived: false },
-  { id: "week", name: "Semana", description: "Presupuesto de gastos de esta semana", color: "#ad94db", icon: "calendar", order: 4, archived: false },
+  { id: "cash", name: "Efectivo", description: "Billetes para gastos del día a día", color: "#ecb46c", icon: "banknote", order: 3, archived: false, budget: { amountMinor: 95000, period: "week" } },
+  { id: "week", name: "Semana", description: "Presupuesto de gastos de esta semana", color: "#ad94db", icon: "calendar", order: 4, archived: false, budget: { amountMinor: 120000, period: "week" } },
   { id: "fund", name: "Fondo", description: "Reserva para emergencias", color: "#949eae", icon: "chart", order: 5, archived: false },
 ];
 

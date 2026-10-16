@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope } from "@/features/ledger/ledgerSlice";
-import { selectAccounts, selectActiveEnvelopes, selectBalances, selectEnvelopes, selectLedgerLoaded, selectMovements } from "@/features/ledger/selector";
+import { selectAccounts, selectActiveEnvelopes, selectBalances, selectBudgets, selectEnvelopes, selectLedgerLoaded, selectMovements } from "@/features/ledger/selector";
 import { checkMovement, type MovementDraft } from "@/features/ledger/domain/validation";
 import type { Envelope, Movement } from "@/features/ledger/domain/types";
 import { useAppDispatch, useAppSelector } from "@/hooks/useReduxHooks";
@@ -24,6 +24,9 @@ export function useLedgerData() {
   const accounts = useAppSelector(selectAccounts);
   const movements = useAppSelector(selectMovements);
   const balances = useAppSelector(selectBalances);
+  const [today] = useState(() => toLocalIsoDate(new Date()));
+  /** Presupuesto de cada sobre que lo tiene, en el periodo de hoy. */
+  const budgets = useAppSelector((state) => selectBudgets(state, today));
 
   useEffect(() => {
     if (!loaded) void dispatch(loadLedger());
@@ -80,5 +83,5 @@ export function useLedgerData() {
     [dispatch, movements],
   );
 
-  return { loaded, envelopes, balanceOf, documentsFor, activityFor, checkDraft, record, withStyle, saveStyle, createEnvelope, archive, cancel };
+  return { loaded, envelopes, budgets, balanceOf, documentsFor, activityFor, checkDraft, record, withStyle, saveStyle, createEnvelope, archive, cancel };
 }

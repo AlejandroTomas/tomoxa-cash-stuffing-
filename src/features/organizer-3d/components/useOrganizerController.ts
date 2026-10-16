@@ -413,6 +413,7 @@ export function useOrganizerController() {
     selectedId,
     loaded: ledger.loaded,
     envelopes,
+    budgets: ledger.budgets,
     balanceOf: ledger.balanceOf,
     activityFor: ledger.activityFor,
     checkDraft: ledger.checkDraft,
