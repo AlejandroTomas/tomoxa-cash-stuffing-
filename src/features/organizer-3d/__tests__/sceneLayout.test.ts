@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
 
@@ -166,5 +166,14 @@ describe("cualquier número de sobres", () => {
       const half = ENVELOPE.height / 2;
       expect(own.y + pocketClearance(count) * Math.cos(own.rx) - half * Math.cos(own.rx)).toBeGreaterThan(front.y + half * Math.cos(front.rx) + 0.2);
     }
+  });
+});
+
+describe("labelScale", () => {
+  it("hasta seis sobres la etiqueta es de tamaño completo; con más se achica como la franja visible", () => {
+    expect(labelScale(3)).toBe(1);
+    expect(labelScale(6)).toBe(1);
+    expect(labelScale(8)).toBeLessThan(stackLayout(8).stagger / ENVELOPE.stagger);
+    expect(labelScale(8)).toBeLessThan(labelScale(7));
   });
 });

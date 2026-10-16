@@ -64,6 +64,18 @@ export function stackLayout(count: number): StackLayout {
 }
 
 /**
+ * Parte de la separación que no sirve para la etiqueta: el borde soldado de
+ * arriba y lo que tapa de más el sobre de enfrente (por la perspectiva y el abanico).
+ */
+const LABEL_MARGIN = 0.2;
+
+/**
+ * Escala de la etiqueta impresa: con más de seis sobres la franja visible de
+ * cada uno se reduce y la etiqueta se achica igual (si no, el de enfrente la tapa).
+ */
+export const labelScale = (count = COMFORT_COUNT) => Math.min(1, (stackLayout(count).stagger - LABEL_MARGIN) / (ENVELOPE.stagger - LABEL_MARGIN));
+
+/**
  * Lugar de reposo del sobre `index` de `count`. Cerrada: planos y apilados.
  * Abierta: girados `fan` sobre su borde inferior (como un archivador).
  */

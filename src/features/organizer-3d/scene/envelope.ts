@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { roundedFrame, roundedSlab } from "./geometry";
 import { createLabelTexture, LABEL_ASPECT, redrawLabel } from "./labels";
-import { ENVELOPE, slotPose } from "./layout";
+import { ENVELOPE, labelScale, slotPose } from "./layout";
 import type { MaterialKit, PlasticOptions } from "./materials";
 
 export interface EnvelopePart {
@@ -17,6 +17,8 @@ export interface EnvelopePart {
   mouth: THREE.Group;
   /** Orden de dibujo de las capas transparentes; el sobre activo va encima. */
   setLayer: (base: number) => void;
+  /** Ajusta la etiqueta a cuántos sobres hay (con 7–8 se achica para no quedar tapada). */
+  fitLabel: (count: number) => void;
   /** Recolorea el plástico y reimprime la etiqueta (editar sobre, con vista previa en vivo). */
   restyle: (item: EnvelopeItem) => void;
   /** Quita el sobre de la escena y libera sus materiales (las geometrías son compartidas). */
@@ -123,6 +125,13 @@ export function createEnvelope(item: EnvelopeItem, index: number, count: number,
     4,
   );
   label.name = "label";
+  // Se achica desde la esquina superior izquierda (el icono no se mueve) y sube un poco, pegada al borde soldado.
+  const fitLabel = (total: number) => {
+    const k = labelScale(total);
+    label.scale.setScalar(k);
+    label.position.set(-0.05 - (LABEL_H * LABEL_ASPECT * (1 - k)) / 2, LABEL_Y + (LABEL_H * (1 - k)) / 2 + (1 - k) * 0.08, 0.042);
+  };
+  fitLabel(count);
 
   hover.traverse((object) => {
     object.userData.envelopeId = item.id satisfies EnvelopeId;
@@ -150,5 +159,5 @@ export function createEnvelope(item: EnvelopeItem, index: number, count: number,
     kit.release(...own());
   };
 
-  return { item, index, group, hover, mouth, setLayer, restyle, dispose };
+  return { item, index, group, hover, mouth, setLayer, fitLabel, restyle, dispose };
 }

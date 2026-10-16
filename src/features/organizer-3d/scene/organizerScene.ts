@@ -657,6 +657,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
         existing.index = index;
         existing.item = item;
         existing.restyle(item);
+        existing.fitLabel(items.length);
         return existing;
       }
       const created = createEnvelope(item, index, items.length, kit, geometries, maxAnisotropy);
