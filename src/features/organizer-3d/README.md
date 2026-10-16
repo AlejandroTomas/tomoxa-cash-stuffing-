@@ -90,7 +90,9 @@ mensual). Con presupuesto, el detalle muestra lo gastado en el periodo y el ataj
 Al registrar un movimiento (botón "Registrar") las fichas también se animan, según
 `moneyFlowOf`: el ingreso llega de fuera a su sobre, el gasto sale, la compra con
 tarjeta pasa del sobre a la reserva y el pago de tarjeta sale de la reserva
-(`transfer(from, to)` de la escena, con `null` = fuera). Solo con la carpeta abierta
+(`transfer(from, to)` de la escena, con `null` = fuera: un punto arriba a la derecha
+del sobre en pantalla, dentro de la zona libre — `outsideNdc` —, para que la barra
+o la tarjeta no lo tapen). Solo con la carpeta abierta
 y sin un sobre fuera; depósito/retiro no se anima (no cambia sobres). Al cancelar
 un movimiento las fichas hacen el camino inverso (`reversalFlowOf`); si se canceló
 desde los documentos de un sobre abierto, el sobre se cierra y se reabre sin animar.

@@ -3,7 +3,7 @@ import { gsap } from "gsap";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { createBinder } from "./binder";
 import { createEnvelope, createEnvelopeGeometries, type EnvelopePart } from "./envelope";
-import { fovFor, presentDepth, rigFor, subFov, type CameraRig, type Viewport } from "./framing";
+import { fovFor, freeNdc, outsideNdc, presentDepth, rigFor, subFov, type CameraRig, type Viewport } from "./framing";
 import type { EnvelopeDocument } from "../domain/document";
 import { classifyGesture, TAP_SLOP, type SwipeDirection } from "../domain/gestures";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
@@ -555,8 +555,17 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   let flyingTokens: MoneyTokens | null = null;
 
-  /** Punto "fuera de la carpeta" cerca de un sobre: hacia la cámara, arriba a la derecha (de ahí llega o ahí se va el dinero). */
-  const outsideOf = (point: THREE.Vector3) => point.clone().add(new THREE.Vector3(2.4, 1.8, 3.6));
+  /**
+   * Punto "fuera de la carpeta" cerca de un sobre (de ahí llega o ahí se va el
+   * dinero): arriba a la derecha en pantalla, dentro de la zona libre, y más
+   * cerca de la cámara sobre el mismo rayo (se ve en el mismo lugar, más grande).
+   */
+  const outsideOf = (point: THREE.Vector3) => {
+    camera.updateMatrixWorld();
+    const ndc = point.clone().project(camera);
+    const target = outsideNdc(ndc, freeNdc(canvasSize.width, canvasSize.height, safe));
+    return new THREE.Vector3(target.x, target.y, ndc.z).unproject(camera).lerp(camera.position, 0.3);
+  };
 
   /**
    * Fichas de dinero de un sobre a otro. `null` = fuera de la carpeta: un

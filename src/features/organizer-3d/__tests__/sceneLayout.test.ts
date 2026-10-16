@@ -1,4 +1,4 @@
-import { fitDistance, fovFor, frameFor, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
+import { fitDistance, fovFor, frameFor, freeNdc, outsideNdc, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
 import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
@@ -175,5 +175,31 @@ describe("labelScale", () => {
     expect(labelScale(6)).toBe(1);
     expect(labelScale(8)).toBeLessThan(stackLayout(8).stagger / ENVELOPE.stagger);
     expect(labelScale(8)).toBeLessThan(labelScale(7));
+  });
+});
+
+describe("dinero que llega de fuera o se va", () => {
+  // Lienzo de 1000×800 con la barra arriba (100 px) y la tarjeta a la derecha (300 px).
+  const free = freeNdc(1000, 800, { top: 100, right: 300, bottom: 20, left: 8 });
+
+  it("la zona libre descuenta lo que tapa la interfaz", () => {
+    expect(free.top).toBeCloseTo(0.75);
+    expect(free.right).toBeCloseTo(0.4);
+    expect(free.bottom).toBeCloseTo(-0.95);
+  });
+
+  it("aparece arriba a la derecha del sobre cuando hay espacio", () => {
+    expect(outsideNdc({ x: -0.5, y: 0 }, free)).toEqual({ x: -0.2, y: 0.3 });
+  });
+
+  it("nunca queda bajo la barra ni la tarjeta", () => {
+    const point = outsideNdc({ x: 0.3, y: 0.6 }, free);
+    expect(point.x).toBeCloseTo(0.28);
+    expect(point.y).toBeCloseTo(0.63);
+  });
+
+  it("si la zona es más chica que la holgura, se queda en su centro", () => {
+    const tiny = { left: 0, right: 0.1, bottom: 0, top: 0.1 };
+    expect(outsideNdc({ x: 0.9, y: 0.9 }, tiny)).toEqual({ x: 0.05, y: 0.05 });
   });
 });

@@ -88,3 +88,35 @@ export function presentDepth(rig: CameraRig, viewport: Viewport, width: number, 
   const byHeight = rig.distance - height / 2 / (fill * tan);
   return Math.max(0, Math.min(maxZ, byWidth, byHeight));
 }
+
+/** Rectángulo en coordenadas normalizadas del lienzo (−1…1, +y hacia arriba). */
+export interface NdcRect {
+  left: number;
+  right: number;
+  bottom: number;
+  top: number;
+}
+
+/** Zona libre del lienzo (sin lo que tapa la interfaz, en px) en coordenadas normalizadas. */
+export function freeNdc(width: number, height: number, safe: { top: number; right: number; bottom: number; left: number }): NdcRect {
+  return {
+    left: -1 + (2 * safe.left) / width,
+    right: 1 - (2 * safe.right) / width,
+    bottom: -1 + (2 * safe.bottom) / height,
+    top: 1 - (2 * safe.top) / height,
+  };
+}
+
+const clamp = (value: number, min: number, max: number) => (min > max ? (min + max) / 2 : Math.min(max, Math.max(min, value)));
+
+/**
+ * Dónde aparece (o desaparece) en pantalla el dinero que llega de fuera o se va:
+ * arriba a la derecha del sobre, pero dentro de la zona libre (con `margin` de
+ * holgura) para que la barra o la tarjeta no lo tapen.
+ */
+export function outsideNdc(point: { x: number; y: number }, free: NdcRect, offset = { x: 0.3, y: 0.3 }, margin = 0.12): { x: number; y: number } {
+  return {
+    x: clamp(point.x + offset.x, free.left + margin, free.right - margin),
+    y: clamp(point.y + offset.y, free.bottom + margin, free.top - margin),
+  };
+}
