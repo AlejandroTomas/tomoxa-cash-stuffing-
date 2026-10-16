@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { gsap } from "gsap";
-import { envelopesMock, type EnvelopeId } from "../mocks/envelopes.mock";
+import { envelopesMock, type EnvelopeId, type EnvelopeItem } from "../mocks/envelopes.mock";
 import { createBinder } from "./binder";
 import { createEnvelope, createEnvelopeGeometries, type EnvelopePart } from "./envelope";
 import { fovFor, presentDepth, rigFor, subFov, type CameraRig, type Viewport } from "./framing";
 import type { EnvelopeDocument } from "../domain/document";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
+import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
 import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, slotPose, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
@@ -37,6 +38,10 @@ export interface OrganizerSceneApi {
   showDocuments: (visibleIds: readonly string[], caption: string) => void;
   pickDocument: (id: string) => Promise<void>;
   returnDocument: () => Promise<void>;
+  /** Fichas de dinero viajan de un sobre a otro (solo animación; los montos los cambia la interfaz). Con la carpeta abierta. */
+  transfer: (from: EnvelopeId, to: EnvelopeId) => Promise<void>;
+  /** Aplica nombre, color e icono a un sobre (vista previa en vivo y guardado). */
+  restyleEnvelope: (item: EnvelopeItem) => void;
   setSafeArea: (area: SafeArea) => void;
   onIntent: (callback: ((intent: SceneIntent) => void) | null) => void;
   dispose: () => void;
@@ -480,6 +485,78 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     await play((tl) => arrange(tl, 0, 0));
   }
 
+  // ── Mover dinero entre sobres ─────────────────────────────────────────────
+  /** Boca del sobre en coordenadas de mundo (un poco adentro: ahí entran y salen las fichas). */
+  function mouthPoint(part: EnvelopePart, depth: number) {
+    root.updateMatrixWorld(true);
+    return part.hover.localToWorld(new THREE.Vector3(0, ENVELOPE.height / 2 - depth, 0.06));
+  }
+
+  let flyingTokens: MoneyTokens | null = null;
+
+  async function transfer(fromId: EnvelopeId, toId: EnvelopeId) {
+    const from = byId.get(fromId);
+    const to = byId.get(toId);
+    if (!from || !to || from === to || disposed || (stage !== "open" && stage !== "focused")) return;
+    clearHover();
+    const tokens = createMoneyTokens(3);
+    flyingTokens = tokens;
+    tokens.meshes.forEach((mesh) => scene.add(mesh));
+    // Puntos del arco: sale de la boca del origen, sube hacia la cámara y cae en la boca del destino.
+    const start = mouthPoint(from, 0.45);
+    const end = mouthPoint(to, 0.5);
+    // Arco (en mundo) hacia la cámara y un poco arriba: las fichas pasan por delante de todos los sobres.
+    const control = start.clone().lerp(end, 0.5).add(new THREE.Vector3(0.7, 1.1, 2.6));
+    const flight = d(1.3);
+    const stagger = d(0.14);
+    const arrival = flight + stagger * (tokens.meshes.length - 1);
+    await play((tl) => {
+      // El origen abre la boca y se levanta un poco al soltar las fichas.
+      tl.to(from.mouth.rotation, { x: 0.7, duration: d(0.3), ease: "back.out(1.6)" }, 0);
+      tl.to(from.hover.position, { y: 0.12, duration: d(0.3), ease: "power2.out" }, 0);
+      tokens.meshes.forEach((mesh, i) => {
+        const progress = { t: 0 };
+        const point = new THREE.Vector3();
+        const at = d(0.15) + i * stagger;
+        tl.call(() => {
+          mesh.visible = true;
+        }, [], at);
+        tl.to(progress, {
+          t: 1,
+          duration: flight,
+          ease: "power1.inOut",
+          onUpdate: () => {
+            const t = progress.t;
+            // Bézier cuadrática: inicio → control → fin.
+            point.copy(start).multiplyScalar((1 - t) * (1 - t)).addScaledVector(control, 2 * (1 - t) * t).addScaledVector(end, t * t);
+            mesh.position.copy(point);
+            // De cara a la cámara, con un giro suave en el aire.
+            mesh.rotation.set(-0.15 + (1 - Math.sin(t * Math.PI)) * 0.5, Math.sin(t * Math.PI * 2) * 0.5 + i * 0.12, (t - 0.5) * 0.6 + i * 0.08);
+            mesh.scale.setScalar(0.75 + Math.sin(t * Math.PI) * 0.75);
+          },
+        }, at);
+        tl.call(() => {
+          mesh.visible = false;
+        }, [], at + flight);
+      });
+      // El origen se cierra; el destino abre la boca antes de recibir y "traga" al final.
+      tl.to(from.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, d(0.15) + arrival * 0.5);
+      tl.to(from.hover.position, { y: 0, duration: d(0.35), ease: "power2.inOut" }, d(0.15) + arrival * 0.5);
+      tl.to(to.mouth.rotation, { x: 0.75, duration: d(0.3), ease: "back.out(1.6)" }, d(0.15) + flight * 0.6);
+      tl.to(to.hover.position, { y: -0.06, duration: d(0.12), ease: "power2.in" }, d(0.15) + arrival);
+      tl.to(to.hover.position, { y: 0, duration: d(0.35), ease: "back.out(2)" }, d(0.27) + arrival);
+      tl.to(to.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, d(0.3) + arrival);
+      tl.call(() => {
+        tokens.dispose();
+        flyingTokens = null;
+      }, [], d(0.65) + arrival);
+    });
+  }
+
+  function restyleEnvelope(item: EnvelopeItem) {
+    byId.get(item.id)?.restyle(item);
+  }
+
   // ── Puntero: hover, paralaje y toques ─────────────────────────────────────
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
@@ -613,6 +690,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     showDocuments,
     pickDocument,
     returnDocument,
+    transfer,
+    restyleEnvelope,
     setSafeArea: (area) => {
       const same = area.top === safe.top && area.right === safe.right && area.bottom === safe.bottom && area.left === safe.left;
       if (same || disposed) return;
@@ -625,6 +704,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     dispose: () => {
       disposed = true;
       disposeStack();
+      flyingTokens?.dispose();
       intentListener = null;
       ctx.kill();
       running = null;

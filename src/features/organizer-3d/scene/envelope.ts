@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import type { EnvelopeId, EnvelopeItem } from "../mocks/envelopes.mock";
 import { roundedFrame, roundedSlab } from "./geometry";
-import { createLabelTexture, LABEL_ASPECT } from "./labels";
+import { createLabelTexture, LABEL_ASPECT, redrawLabel } from "./labels";
 import { ENVELOPE, slotPose } from "./layout";
-import type { MaterialKit } from "./materials";
+import type { MaterialKit, PlasticOptions } from "./materials";
 
 export interface EnvelopePart {
   item: EnvelopeItem;
@@ -16,6 +16,8 @@ export interface EnvelopePart {
   mouth: THREE.Group;
   /** Orden de dibujo de las capas transparentes; el sobre activo va encima. */
   setLayer: (base: number) => void;
+  /** Recolorea el plástico y reimprime la etiqueta (editar sobre, con vista previa en vivo). */
+  restyle: (item: EnvelopeItem) => void;
 }
 
 const EW = ENVELOPE.width;
@@ -74,37 +76,46 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
     layered.push([m, layer]);
     return m;
   };
-  const deep = `#${new THREE.Color(item.color).lerp(new THREE.Color("#3a3340"), 0.18).getHexString()}`;
+  const deepOf = (color: string) => `#${new THREE.Color(color).lerp(new THREE.Color("#3a3340"), 0.18).getHexString()}`;
+  const deep = deepOf(item.color);
+  // Cada plástico recuerda de qué color sale y cuánto se aclara, para poder recolorearlo.
+  const tinted: Array<{ material: THREE.MeshPhysicalMaterial; deep: boolean; lighten: number }> = [];
+  const plastic = (options: PlasticOptions, isDeep = false) => {
+    const material = kit.plastic(isDeep ? deep : item.color, options);
+    tinted.push({ material, deep: isDeep, lighten: options.lighten ?? 0 });
+    return material;
+  };
 
-  add(geo.back, kit.plastic(item.color, { opacity: 1, roughness: 0.55, clearcoat: 0.35, lighten: 0.16, opaque: true }), [0, 0, -0.045], 0, true);
+  add(geo.back, plastic({ opacity: 1, roughness: 0.55, clearcoat: 0.35, lighten: 0.16, opaque: true }), [0, 0, -0.045], 0, true);
   // Funda interior desplazada: la doble silueta de las bolsas de la referencia.
-  add(geo.sleeve, kit.plastic(item.color, { opacity: 0.5, roughness: 0.5, clearcoat: 0.3, lighten: 0.2 }), [0.1, 0.07, -0.022], 1);
+  add(geo.sleeve, plastic({ opacity: 0.5, roughness: 0.5, clearcoat: 0.3, lighten: 0.2 }), [0.1, 0.07, -0.022], 1);
 
   // Contenido: tarjetas de papel genéricas (no imitan billetes).
   const paper = kit.paper(item.tone);
   add(geo.note, paper, [0.15, -0.3, -0.012], 1).rotation.z = 0.03;
 
   // Cara frontal acolchada y esmerilada: deja ver el contenido difuso.
-  add(geo.front, kit.plastic(item.color, { opacity: 0.62, roughness: 0.5, clearcoat: 0.6, lighten: 0.06 }), [0, -0.06, 0.012], 2);
-  add(geo.weld, kit.plastic(item.color, { opacity: 1, roughness: 0.4, clearcoat: 0.5, lighten: 0.3, opaque: true }), [0, 0, 0.03], 3);
+  add(geo.front, plastic({ opacity: 0.62, roughness: 0.5, clearcoat: 0.6, lighten: 0.06 }), [0, -0.06, 0.012], 2);
+  add(geo.weld, plastic({ opacity: 1, roughness: 0.4, clearcoat: 0.5, lighten: 0.3, opaque: true }), [0, 0, 0.03], 3);
   // Labio superior con bisagra en su borde inferior: la "boca" del sobre.
   const mouth = new THREE.Group();
   mouth.position.set(0, TOP - 0.13, 0.03);
   hover.add(mouth);
-  const lip = new THREE.Mesh(geo.lip, kit.plastic(item.color, { opacity: 1, roughness: 0.35, clearcoat: 0.8, lighten: 0.5, opaque: true }));
+  const lip = new THREE.Mesh(geo.lip, plastic({ opacity: 1, roughness: 0.35, clearcoat: 0.8, lighten: 0.5, opaque: true }));
   lip.position.y = 0.06;
   lip.receiveShadow = true;
   mouth.add(lip);
   layered.push([lip, 3]);
 
   // Pestañas: una opaca en el borde izquierdo y otra translúcida asomando a la derecha.
-  add(geo.leftTab, kit.plastic(deep, { opacity: 1, roughness: 0.45, clearcoat: 0.4, opaque: true }), [-EW / 2 + 0.02, LABEL_Y - 0.16, 0.02], 3);
-  if (index >= 2) add(geo.rightTab, kit.plastic(item.color, { opacity: 1, roughness: 0.5, clearcoat: 0.4, lighten: 0.2, opaque: true }), [EW / 2 + 0.08, TOP - 0.42, -0.03], 0);
+  add(geo.leftTab, plastic({ opacity: 1, roughness: 0.45, clearcoat: 0.4, opaque: true }, true), [-EW / 2 + 0.02, LABEL_Y - 0.16, 0.02], 3);
+  if (index >= 2) add(geo.rightTab, plastic({ opacity: 1, roughness: 0.5, clearcoat: 0.4, lighten: 0.2, opaque: true }), [EW / 2 + 0.08, TOP - 0.42, -0.03], 0);
 
   // Etiqueta impresa sobre el plástico.
+  const labelTexture = kit.track(createLabelTexture(item, maxAnisotropy));
   const label = add(
     geo.label,
-    kit.track(new THREE.MeshBasicMaterial({ map: kit.track(createLabelTexture(item, maxAnisotropy)), transparent: true, depthWrite: false, toneMapped: false })),
+    kit.track(new THREE.MeshBasicMaterial({ map: labelTexture, transparent: true, depthWrite: false, toneMapped: false })),
     [-0.05, LABEL_Y, 0.042],
     4,
   );
@@ -116,5 +127,13 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
 
   const setLayer = (base: number) => layered.forEach(([m, layer]) => (m.renderOrder = base + layer));
   setLayer(10 + index * 5);
-  return { item, index, group, hover, mouth, setLayer };
+  const white = new THREE.Color("#ffffff");
+  const restyle = (next: EnvelopeItem) => {
+    const nextDeep = deepOf(next.color);
+    tinted.forEach(({ material, deep: isDeep, lighten }) => material.color.set(isDeep ? nextDeep : next.color).lerp(white, lighten));
+    paper.color.set(next.tone);
+    redrawLabel(labelTexture, next);
+  };
+
+  return { item, index, group, hover, mouth, setLayer, restyle };
 }

@@ -85,3 +85,11 @@ export function createLabelTexture(item: EnvelopeItem, maxAnisotropy: number): T
   });
   return texture;
 }
+
+/** Reimprime una etiqueta existente (al editar nombre, color o icono del sobre). */
+export function redrawLabel(texture: THREE.CanvasTexture, item: EnvelopeItem) {
+  const ctx = (texture.image as HTMLCanvasElement).getContext("2d");
+  if (!ctx) return;
+  draw(ctx, item);
+  texture.needsUpdate = true;
+}

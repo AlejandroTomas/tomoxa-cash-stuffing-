@@ -1,14 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronRight } from "lucide-react";
-import { getEnvelope } from "../mocks/envelopes.mock";
+import { toast } from "@/core/toast";
+import type { EnvelopeStyle } from "../domain/envelopeStyle";
+import type { Transfer } from "../domain/transfer";
+import type { EnvelopeItem } from "../mocks/envelopes.mock";
 import type { OrganizerView } from "../domain/organizerView";
 import { cn } from "@/lib/utils";
 import { DocumentsPanel } from "./DocumentsPanel";
-import { EnvelopeDetailCard, glass } from "./EnvelopeDetailCard";
+import { EnvelopeDetailCard, formatAmount, glass } from "./EnvelopeDetailCard";
+import { EditEnvelopeDialog } from "./EditEnvelopeDialog";
 import { EnvelopeTiles } from "./EnvelopeTiles";
+import { MoveMoneyDialog } from "./MoveMoneyDialog";
 import { handwriting } from "./fonts";
 import { OrganizerBackdrop } from "./OrganizerBackdrop";
 import { OrganizerNav } from "./OrganizerNav";
@@ -19,8 +24,8 @@ const OrganizerCanvas = dynamic(() => import("./OrganizerCanvas"), {
   loading: () => <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Preparando tu carpeta…</div>,
 });
 
-function announce(view: OrganizerView): string {
-  const name = view.activeId ? getEnvelope(view.activeId).name : "";
+function announce(view: OrganizerView, envelopes: readonly EnvelopeItem[]): string {
+  const name = envelopes.find((item) => item.id === view.activeId)?.name ?? "";
   if (view.stage === "closed") return "Carpeta cerrada.";
   if (view.stage === "open") return "Carpeta abierta. Elige un sobre.";
   if (view.stage === "focused") return `Sobre ${name} seleccionado.`;
@@ -42,14 +47,25 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * importes vienen del mock y nada mueve dinero real.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+  const { view, selectedId, envelopes, balances, activityFor, moveMoney, previewStyle, commitStyle, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
     useOrganizerController();
   const sceneRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
   const tilesRef = useRef<HTMLDivElement>(null);
-  const item = getEnvelope(selectedId);
+  const item = envelopes.find((envelope) => envelope.id === selectedId) ?? envelopes[0];
+  const [dialog, setDialog] = useState<"move" | "edit" | null>(null);
+  const itemId = item.id;
+  const onPreview = useCallback((style: EnvelopeStyle | null) => previewStyle(itemId, style), [previewStyle, itemId]);
+  const otherNames = useMemo(() => envelopes.filter((envelope) => envelope.id !== item.id).map((envelope) => envelope.name), [envelopes, item.id]);
+
+  const onTransfer = async (transfer: Transfer) => {
+    const done = await moveMoney(transfer);
+    if (!done) return;
+    const name = (id: string) => envelopes.find((envelope) => envelope.id === id)?.name ?? "";
+    toast.success(`Moviste ${formatAmount(transfer.amountMinor / 100)} de ${name(transfer.from)} a ${name(transfer.to)}. Demostración: no se guarda.`);
+  };
 
   // La carpeta se encuadra en la parte del lienzo que no tapa la interfaz.
   useEffect(() => {
@@ -114,13 +130,13 @@ export function OrganizerExperience() {
           Representación visual de la carpeta. Usa los botones de los sobres o el teclado: flechas para cambiar de sobre y Escape para regresar.
         </p>
         <p className="sr-only" aria-live="polite">
-          {announce(view)}
+          {announce(view, envelopes)}
         </p>
       </section>
 
       <div className="relative z-10 flex flex-col gap-4 px-3 pb-6 lg:contents">
         <div ref={tilesRef} className="lg:absolute lg:right-[1.6%] lg:bottom-[2.6%] lg:z-10 lg:w-[min(51%,1000px)]">
-          <EnvelopeTiles selectedId={selectedId} busy={busy} onSelect={(id) => void selectEnvelope(id)} />
+          <EnvelopeTiles envelopes={envelopes} selectedId={selectedId} busy={busy} onSelect={(id) => void selectEnvelope(id)} />
         </div>
         <div ref={cardRef} className="lg:absolute lg:top-[13%] lg:right-[2%] lg:z-10 lg:w-[min(27.5%,540px)] lg:min-w-[380px]">
           {view.stage === "browsing" || view.stage === "reading" ? (
@@ -143,6 +159,10 @@ export function OrganizerExperience() {
           ) : (
             <EnvelopeDetailCard
               item={item}
+              envelopes={envelopes}
+              activity={activityFor(item.id)}
+              onMoveMoney={() => setDialog("move")}
+              onEdit={() => setDialog("edit")}
               stage={view.stage}
               busy={busy}
               onExtract={() => void extractSelected()}
@@ -155,6 +175,22 @@ export function OrganizerExperience() {
           )}
         </div>
       </div>
+      <MoveMoneyDialog
+        open={dialog === "move"}
+        onOpenChange={(open) => setDialog(open ? "move" : null)}
+        envelopes={envelopes}
+        balances={balances}
+        defaultFrom={item.id}
+        onConfirm={(transfer) => void onTransfer(transfer)}
+      />
+      <EditEnvelopeDialog
+        open={dialog === "edit"}
+        onOpenChange={(open) => setDialog(open ? "edit" : null)}
+        item={item}
+        otherNames={otherNames}
+        onPreview={onPreview}
+        onSave={(style) => commitStyle(item.id, style)}
+      />
     </main>
   );
 }

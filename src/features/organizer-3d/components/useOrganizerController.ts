@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportError } from "@/core/logger";
-import { sortByRecent } from "../domain/document";
 import { describeFilter, EMPTY_FILTER, filterDocuments, type DocumentFilter } from "../domain/documentFilter";
-import { documentsOf } from "../mocks/documents.mock";
+import type { EnvelopeStyle } from "../domain/envelopeStyle";
+import type { Transfer } from "../domain/transfer";
 import { neighborEnvelope, type EnvelopeId } from "../mocks/envelopes.mock";
+import { useDemoLedger } from "./useDemoLedger";
 import { backAction, initialView, isEnvelopeOut, transitionView, type OrganizerAction, type OrganizerView } from "../domain/organizerView";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "../scene/organizerScene";
 
@@ -33,8 +34,14 @@ export function useOrganizerController() {
   }, [selectedId]);
 
   // ── Documentos del sobre seleccionado y su filtro ─────────────────────────
+  const ledger = useDemoLedger();
+  const { documentsFor, recordTransfer, saveStyle, withStyle, envelopeOf } = ledger;
   const [filter, setFilterState] = useState<DocumentFilter>(EMPTY_FILTER);
-  const documents = useMemo(() => sortByRecent(documentsOf(selectedId)), [selectedId]);
+  const documents = useMemo(() => documentsFor(selectedId), [documentsFor, selectedId]);
+  const envelopesRef = useRef(ledger.envelopes);
+  useEffect(() => {
+    envelopesRef.current = ledger.envelopes;
+  }, [ledger.envelopes]);
   const visibleDocuments = useMemo(() => filterDocuments(documents, filter), [documents, filter]);
   const documentsRef = useRef({ all: documents, visible: visibleDocuments });
   const filterRef = useRef(filter);
@@ -135,6 +142,48 @@ export function useOrganizerController() {
     [selectEnvelope],
   );
 
+  /**
+   * Mueve dinero (demo): deja la carpeta abierta y sin sobres fuera, anima las
+   * fichas y luego actualiza saldos y movimientos. Devuelve si se aplicó.
+   */
+  const moveMoney = useCallback(
+    async (transfer: Transfer): Promise<boolean> => {
+      if (busyRef.current) return false;
+      if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
+      await putEnvelopeBack();
+      if (viewRef.current.stage === "focused") await perform({ type: "CLEAR_FOCUS" });
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        await sceneRef.current?.transfer(transfer.from, transfer.to);
+        recordTransfer(transfer);
+        setSelectedId(transfer.to);
+        return true;
+      } catch (error) {
+        reportError(error, { context: "organizer3d.transfer" });
+        return false;
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    },
+    [perform, putEnvelopeBack, recordTransfer],
+  );
+
+  /** Vista previa en vivo del estilo en la carpeta; `null` vuelve al estilo guardado. */
+  const previewStyle = useCallback(
+    (id: EnvelopeId, style: EnvelopeStyle | null) => sceneRef.current?.restyleEnvelope(style ? withStyle(id, style) : envelopeOf(id)),
+    [withStyle, envelopeOf],
+  );
+
+  const commitStyle = useCallback(
+    (id: EnvelopeId, style: EnvelopeStyle) => {
+      saveStyle(id, style);
+      sceneRef.current?.restyleEnvelope(withStyle(id, style));
+    },
+    [saveStyle, withStyle],
+  );
+
   /** Saca el documento siguiente/anterior entre los que pasan el filtro. */
   const stepDocument = useCallback(
     (direction: -1 | 1) => {
@@ -206,6 +255,8 @@ export function useOrganizerController() {
     (api: OrganizerSceneApi | null) => {
       sceneRef.current = api;
       if (api && safeAreaRef.current) api.setSafeArea(safeAreaRef.current);
+      // Una escena nueva (p. ej. recarga en caliente) recibe los nombres y colores editados.
+      if (api) envelopesRef.current.forEach((item) => api.restyleEnvelope(item));
       setSceneReady(Boolean(api));
       if (!api) return;
       // Se difiere un tick: en desarrollo StrictMode monta, desmonta y vuelve a
@@ -247,6 +298,12 @@ export function useOrganizerController() {
   return {
     view,
     selectedId,
+    envelopes: ledger.envelopes,
+    balances: ledger.balances,
+    activityFor: ledger.activityFor,
+    moveMoney,
+    previewStyle,
+    commitStyle,
     documents,
     visibleDocuments,
     filter,
@@ -268,7 +325,8 @@ export function useOrganizerController() {
       onUnavailable: (message: string) => {
         setUnavailable(message);
         // Sin 3D la carpeta "abre" al instante para que la interfaz quede igual.
-        void toggleBinder();
+        // Solo abre (no alterna): puede avisar más de una vez (StrictMode monta dos veces).
+        if (viewRef.current.stage === "closed") void perform({ type: "OPEN" });
       },
     },
   };

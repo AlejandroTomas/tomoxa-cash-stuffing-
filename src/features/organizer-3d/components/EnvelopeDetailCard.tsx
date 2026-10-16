@@ -4,12 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeftRight, FolderOpen, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { toast } from "@/core/toast";
 import { cn } from "@/lib/utils";
-import { summarizeActivity } from "../domain/document";
+import type { EnvelopeActivity } from "../domain/document";
 import { parseLocalDate } from "../domain/localDate";
-import { documentsOf } from "../mocks/documents.mock";
-import { envelopesMock, type EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeItem } from "../mocks/envelopes.mock";
 import type { Stage } from "../domain/organizerView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
@@ -26,6 +24,11 @@ export function formatShortDate(iso: string): string {
 
 interface EnvelopeDetailCardProps {
   item: EnvelopeItem;
+  /** Todos los sobres (para el indicador de posición). */
+  envelopes: readonly EnvelopeItem[];
+  activity: EnvelopeActivity;
+  onMoveMoney: () => void;
+  onEdit: () => void;
   stage: Stage;
   busy: boolean;
   onExtract: () => void;
@@ -40,13 +43,11 @@ interface EnvelopeDetailCardProps {
 export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
 /** Tarjeta de vidrio con el detalle del sobre seleccionado. Importes de demostración. */
-export function EnvelopeDetailCard({ item, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onEdit, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
-  const index = envelopesMock.findIndex((envelope) => envelope.id === item.id);
+  const index = envelopes.findIndex((envelope) => envelope.id === item.id);
   const extracted = stage === "extracted";
-  const activity = summarizeActivity(documentsOf(item.id));
-  const soon = () => toast.info("Disponible en la siguiente fase. Esta es una demostración visual.");
 
   return (
     <section aria-label={`Detalle de ${item.name}`} className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, className)}>
@@ -118,10 +119,10 @@ export function EnvelopeDetailCard({ item, stage, busy, onExtract, onOpenEnvelop
         {extracted ? "Abrir sobre" : "Extraer sobre"}
       </Button>
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" onClick={soon}>
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" disabled={busy} onClick={onMoveMoney}>
           <ArrowLeftRight /> Mover dinero
         </Button>
-        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" onClick={soon}>
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" disabled={busy} onClick={onEdit}>
           <Pencil /> Editar
         </Button>
       </div>
@@ -131,8 +132,8 @@ export function EnvelopeDetailCard({ item, stage, busy, onExtract, onOpenEnvelop
           <Button variant="ghost" size="icon" aria-label="Sobre anterior" disabled={busy} onClick={() => onStep(-1)} className="rounded-full">
             <ChevronLeft />
           </Button>
-          <span className="flex items-center gap-1.5" aria-label={`Sobre ${index + 1} de ${envelopesMock.length}`} role="img">
-            {envelopesMock.map((envelope) => (
+          <span className="flex items-center gap-1.5" aria-label={`Sobre ${index + 1} de ${envelopes.length}`} role="img">
+            {envelopes.map((envelope) => (
               <span
                 key={envelope.id}
                 className={cn("h-1.5 rounded-full bg-foreground/25 transition-all", envelope.id === item.id ? "w-4 bg-foreground/70" : "w-1.5")}

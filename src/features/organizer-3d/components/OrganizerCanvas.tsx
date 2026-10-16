@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { reportError } from "@/core/logger";
+import { WebGLUnavailableError } from "../errors/organizer-errors";
 import { createOrganizerScene, type OrganizerSceneApi, type SceneIntent } from "../scene/organizerScene";
 
 interface OrganizerCanvasProps {
@@ -33,7 +34,8 @@ export default function OrganizerCanvas(props: OrganizerCanvasProps) {
     if (!element) return;
     let api: OrganizerSceneApi | null = null;
     try {
-      if (!supportsWebGL()) throw new Error("WebGL no disponible");
+      if (!supportsWebGL()) throw new WebGLUnavailableError();
+      // Sin WebGL es un caso esperado (aviso); cualquier otra falla al crear la escena es un bug (error).
       api = createOrganizerScene(element);
       api.onIntent((intent) => callbacks.current.onIntent(intent));
       callbacks.current.onReady(api);

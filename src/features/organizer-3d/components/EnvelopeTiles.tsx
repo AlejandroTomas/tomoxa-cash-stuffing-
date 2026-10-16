@@ -1,10 +1,11 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { envelopesMock, type EnvelopeId } from "../mocks/envelopes.mock";
+import type { EnvelopeId, EnvelopeItem } from "../mocks/envelopes.mock";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
 interface EnvelopeTilesProps {
+  envelopes: readonly EnvelopeItem[];
   selectedId: EnvelopeId;
   busy: boolean;
   onSelect: (id: EnvelopeId) => void;
@@ -15,10 +16,10 @@ interface EnvelopeTilesProps {
  * Fila de sobres (alternativa HTML al lienzo, navegable con teclado). Los
  * colores son datos del sobre, iguales en ambos temas.
  */
-export function EnvelopeTiles({ selectedId, busy, onSelect, className }: EnvelopeTilesProps) {
+export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, className }: EnvelopeTilesProps) {
   return (
     <ul aria-label="Sobres" className={cn("grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:gap-4", className)}>
-      {envelopesMock.map((envelope) => {
+      {envelopes.map((envelope) => {
         const Icon = ENVELOPE_ICONS[envelope.icon];
         const selected = envelope.id === selectedId;
         return (

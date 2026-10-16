@@ -16,6 +16,9 @@ domain/organizerView.ts        Máquina de estados visual: closed → open → f
 domain/document.ts             Documento = movimiento; actividad derivada (movimientos, último)
 domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, texto) y la frase que los describe
 domain/localDate.ts            Fechas "YYYY-MM-DD" locales (sin corrimiento UTC)
+domain/transfer.ts             Mover dinero: validar monto/saldo, aplicar, movimientos que deja
+domain/envelopeStyle.ts        Editar sobre: paleta, iconos, esquema (nombre único) y tono del papel
+errors/organizer-errors.ts     WebGLUnavailableError (caso esperado: se reporta como aviso)
 components/
   OrganizerExperience.tsx      Composición a pantalla completa y medición de la "zona libre"
   useOrganizerController.ts    Una acción a la vez; intro (abre sola); teclado (flechas, Escape)
@@ -24,6 +27,9 @@ components/
   EnvelopeTiles.tsx            Fila de seis sobres: alternativa HTML completa al lienzo
   DocumentsPanel.tsx           Sobre abierto: frase en caligrafía, filtros, lista y documento fuera
   HandwrittenText.tsx · fonts.ts  Caligrafía Caveat (next/font) que "se escribe" letra por letra
+  MoveMoneyDialog.tsx          "Mover dinero" (Credenza + react-hook-form + Zod)
+  EditEnvelopeDialog.tsx       "Editar sobre" con vista previa en vivo en la carpeta
+  useDemoLedger.ts             Estado de DEMOSTRACIÓN en memoria (saldos, estilos, movimientos nuevos)
   OrganizerBackdrop.tsx/.css   Fondo de habitación desenfocada (CSS; foto opcional)
   OrganizerCanvas.tsx          Monta/desmonta la escena (solo cliente, next/dynamic ssr:false)
 scene/                         Three.js directo, sin React
@@ -33,6 +39,7 @@ scene/                         Three.js directo, sin React
   materials.ts · labels.ts     Materiales compartidos (un dueño, se liberan juntos) y etiquetas en canvas
   documents.ts · documentTexture.ts  Tickets del sobre abierto (se crean al abrir, se liberan al cerrar)
   captionTag.ts                Etiqueta de papel con la frase de búsqueda, escrita en la escena
+  moneyTokens.ts               Fichas de dinero genéricas que vuelan entre sobres al mover
   layout.ts · framing.ts       Medidas, bolsillos, abanicos y encuadre de cámara: puro, con tests
 ```
 
@@ -63,6 +70,15 @@ describe (`describeFilter`) se escribe en Caveat en la tarjeta y en una etiqueta
 papel sobre el sobre. Tocar un ticket (o la lista) lo saca al frente; Escape retrocede
 un nivel. El sobre presentado siempre queda delante de la pila; en pantallas angostas
 se achica en lugar de meterse entre los demás. Spec: `.ia/tasks/sobre-documentos-y-busqueda.md`.
+
+## Mover dinero y editar sobres (demostración)
+
+"Mover dinero" valida el monto contra el saldo del origen, cierra el diálogo y anima
+fichas que salen de la boca del sobre de origen y caen en la del destino; después
+actualiza saldos y agrega un movimiento en cada sobre. "Editar" cambia nombre, color
+e icono con vista previa en vivo (en escritorio el diálogo va a la derecha para no
+tapar la carpeta). Todo vive en `useDemoLedger`: en memoria, se pierde al recargar.
+La capa de datos real (fase 2) reemplaza ese hook sin tocar la escena.
 
 ## Fondo fotográfico
 
