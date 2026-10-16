@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportError } from "@/core/logger";
 import { describeFilter, EMPTY_FILTER, filterDocuments, type DocumentFilter } from "../domain/documentFilter";
+import { swipeCommand } from "../domain/gestures";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import type { Transfer } from "../domain/transfer";
 import { neighborEnvelope, type EnvelopeId } from "../mocks/envelopes.mock";
@@ -209,6 +210,14 @@ export function useOrganizerController() {
         if (current.stage === "closed") void perform({ type: "OPEN" });
         return;
       }
+      if (intent.type === "swipe") {
+        const command = swipeCommand(current, intent.direction, { envelope: intent.envelope, document: intent.document });
+        if (!command) return;
+        if (command.kind === "stepEnvelope") step(command.direction);
+        else if (command.kind === "stepDocument") stepDocument(command.direction);
+        else void perform(command.action);
+        return;
+      }
       if (intent.type === "document") {
         if (current.stage === "reading" && current.documentId === intent.id) void perform({ type: "RETURN_DOCUMENT" });
         else void perform({ type: "PICK_DOCUMENT", id: intent.id });
@@ -222,7 +231,7 @@ export function useOrganizerController() {
       if (current.stage === "focused" && intent.id === current.activeId) void perform({ type: "EXTRACT" });
       else void selectEnvelope(intent.id);
     },
-    [perform, selectEnvelope],
+    [perform, selectEnvelope, step, stepDocument],
   );
 
   /** Lleva una escena recién creada al estado visual actual, sin pasar por la máquina. */

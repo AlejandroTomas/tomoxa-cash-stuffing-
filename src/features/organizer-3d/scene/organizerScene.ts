@@ -5,6 +5,7 @@ import { createBinder } from "./binder";
 import { createEnvelope, createEnvelopeGeometries, type EnvelopePart } from "./envelope";
 import { fovFor, presentDepth, rigFor, subFov, type CameraRig, type Viewport } from "./framing";
 import type { EnvelopeDocument } from "../domain/document";
+import { classifyGesture, TAP_SLOP, type SwipeDirection } from "../domain/gestures";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
@@ -13,7 +14,12 @@ import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 
 /** Lo que el usuario tocó en el lienzo; React decide qué acción corresponde. */
-export type SceneIntent = { type: "binder" } | { type: "envelope"; id: EnvelopeId } | { type: "document"; id: string };
+export type SceneIntent =
+  | { type: "binder" }
+  | { type: "envelope"; id: EnvelopeId }
+  | { type: "document"; id: string }
+  /** Deslizamiento (dedo o mouse); `envelope`/`document`: dónde empezó. */
+  | { type: "swipe"; direction: SwipeDirection; envelope?: EnvelopeId; document?: string };
 
 /** Márgenes (px) del lienzo que tapa la interfaz: la carpeta se encuadra en el resto. */
 export interface SafeArea {
@@ -63,8 +69,6 @@ const MIN_PRESENT_Z = 1.6;
 const MOUTH_OPEN = 0.85;
 /** Documento fuera del sobre: al frente y un poco más grande (coordenadas del sobre). */
 const READING = { x: 0, y: 0.95, z: 0.7, scale: 1.22 };
-/** Distancia (px) por debajo de la cual un pointerup cuenta como toque y no como scroll. */
-const TAP_SLOP = 10;
 
 export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const { renderer, scene, camera, dispose: disposeStage } = createStage(mount);
@@ -203,7 +207,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       tl.to(binder.strapTab.rotation, { y: STRAP_TAB_OPEN, duration: d(0.42), ease: "power2.inOut" }, 0);
       tl.to(binder.strapPivot.rotation, { y: STRAP_OPEN, duration: d(0.62), ease: "power2.inOut" }, d(0.1));
       // La tapa "salta" un poco al soltarse el broche y luego abre con peso.
-      tl.to(binder.coverPivot.rotation, { y: -0.12, duration: d(0.22), ease: "power1.out" }, d(0.3));
+      // (Si el dedo ya la abrió un poco, sigue desde ahí.)
+      tl.to(binder.coverPivot.rotation, { y: Math.min(binder.coverPivot.rotation.y, -0.12), duration: d(0.22), ease: "power1.out" }, d(0.3));
       tl.to(binder.coverPivot.rotation, { y: BINDER.openAngle, duration: d(1.25), ease: "power3.inOut" }, d(0.52));
       tl.to(binder.coverShadow, { opacity: coverShadowOpacity, duration: d(0.8), ease: "power1.out" }, d(1.05));
       tl.to(rig, { ...rigFor("open", viewport()), duration: d(1.5), ease: "power2.inOut" }, d(0.3));
@@ -562,7 +567,10 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const ndc = new THREE.Vector2();
   const pointer = { x: 0, y: 0, active: false };
   let hovered: EnvelopePart | null = null;
-  let downAt: { x: number; y: number } | null = null;
+  /** Gesto en curso: dónde empezó y sobre qué. */
+  let downAt: { x: number; y: number; t: number; id: number; envelope?: EnvelopeId; document?: string } | null = null;
+  /** Arrastre actual en px (para que la escena siga al dedo). */
+  const drag = { x: 0, y: 0 };
 
   function pick(event: PointerEvent): { envelope?: EnvelopeId; document?: string; binder: boolean } {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -588,7 +596,42 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     renderer.domElement.style.cursor = "";
   }
 
+  /** Respuesta mientras se arrastra: la tapa o el sobre activo siguen al dedo. */
+  function followDrag(dx: number, dy: number) {
+    drag.x = dx;
+    drag.y = dy;
+    if (running) return;
+    const width = canvasSize.width;
+    const height = canvasSize.height;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    if (stage === "closed" && horizontal) binder.coverPivot.rotation.y = THREE.MathUtils.clamp(dx / width, -1, 0) * 0.6;
+    const active = activeId ? byId.get(activeId) : undefined;
+    if (active && !horizontal && (stage === "focused" || stage === "extracted")) {
+      active.hover.position.y = THREE.MathUtils.clamp(-dy / height, -0.3, 0.4) * 1.2;
+    }
+    shadowsDirtyUntil = performance.now() + 200;
+  }
+
+  /** Suelta el arrastre: lo que no se convirtió en acción vuelve a su lugar. */
+  function releaseDrag() {
+    drag.x = 0;
+    drag.y = 0;
+    if (running) return;
+    const active = activeId ? byId.get(activeId) : undefined;
+    ctx.add(() => {
+      if (stage === "closed") gsap.to(binder.coverPivot.rotation, { y: 0, duration: d(0.35), ease: "back.out(1.6)" });
+      if (active) gsap.to(active.hover.position, { y: 0, duration: d(0.3), ease: "power2.out" });
+    });
+    shadowsDirtyUntil = performance.now() + 500;
+  }
+
   function onPointerMove(event: PointerEvent) {
+    if (downAt && event.pointerId === downAt.id) {
+      const dx = event.clientX - downAt.x;
+      const dy = event.clientY - downAt.y;
+      if (Math.hypot(dx, dy) > TAP_SLOP) followDrag(dx, dy);
+      return;
+    }
     if (event.pointerType !== "mouse") return;
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -612,21 +655,39 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     clearHover();
   }
   function onPointerDown(event: PointerEvent) {
-    downAt = { x: event.clientX, y: event.clientY };
+    if (event.button !== 0) return;
+    const hit = pick(event);
+    downAt = { x: event.clientX, y: event.clientY, t: performance.now(), id: event.pointerId, envelope: hit.envelope, document: hit.document };
   }
   function onPointerUp(event: PointerEvent) {
-    if (!downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > TAP_SLOP) return;
+    if (!downAt || event.pointerId !== downAt.id) return;
+    const start = downAt;
     downAt = null;
-    const hit = pick(event);
-    if (hit.document) intentListener?.({ type: "document", id: hit.document });
-    else if (hit.envelope) intentListener?.({ type: "envelope", id: hit.envelope });
-    else if (hit.binder) intentListener?.({ type: "binder" });
+    const gesture = classifyGesture({ dx: event.clientX - start.x, dy: event.clientY - start.y, dt: performance.now() - start.t });
+    if (gesture === "tap") {
+      const hit = pick(event);
+      if (hit.document) intentListener?.({ type: "document", id: hit.document });
+      else if (hit.envelope) intentListener?.({ type: "envelope", id: hit.envelope });
+      else if (hit.binder) intentListener?.({ type: "binder" });
+      return;
+    }
+    releaseDrag();
+    if (gesture) {
+      if (event.pointerType !== "mouse") navigator.vibrate?.(8);
+      intentListener?.({ type: "swipe", direction: gesture, envelope: start.envelope, document: start.document });
+    }
+  }
+  /** El navegador tomó el gesto (p. ej. para desplazar la página). */
+  function onPointerCancel() {
+    downAt = null;
+    releaseDrag();
   }
   const canvas = renderer.domElement;
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerleave", onPointerLeave);
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerCancel);
 
   // ── Tamaño y visibilidad ──────────────────────────────────────────────────
   function snapFraming() {
@@ -665,8 +726,14 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     if (disposed) return;
     frame = requestAnimationFrame(loop);
     if (!visible || document.hidden) return;
+    // Con la carpeta cerrada o abierta, deslizar en vertical desplaza la página;
+    // con un sobre elegido, el lienzo recibe todos los gestos.
+    const touchAction = stage === "closed" || stage === "open" ? "pan-y" : "none";
+    if (canvas.style.touchAction !== touchAction) canvas.style.touchAction = touchAction;
     if (!reducedMotion) {
-      const tx = pointer.active ? pointer.x * 0.04 : 0;
+      // Al deslizar en horizontal (fuera de "cerrada") la carpeta gira un poco con el dedo.
+      const dragYaw = stage !== "closed" && Math.abs(drag.x) > Math.abs(drag.y) ? THREE.MathUtils.clamp(drag.x / canvasSize.width, -0.5, 0.5) * 0.3 : 0;
+      const tx = (pointer.active ? pointer.x * 0.04 : 0) + dragYaw;
       const ty = pointer.active ? pointer.y * 0.025 : 0;
       root.rotation.y += (tx + Math.sin(now * 0.00035) * 0.01 - root.rotation.y) * 0.06;
       root.rotation.x += (ty - root.rotation.x) * 0.06;
@@ -717,6 +784,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       canvas.removeEventListener("pointerleave", onPointerLeave);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerCancel);
       const geometrySet = new Set<THREE.BufferGeometry>();
       const materialSet = new Set<THREE.Material>();
       scene.traverse((object) => {

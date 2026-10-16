@@ -18,6 +18,7 @@ domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, text
 domain/localDate.ts            Fechas "YYYY-MM-DD" locales (sin corrimiento UTC)
 domain/transfer.ts             Mover dinero: validar monto/saldo, aplicar, movimientos que deja
 domain/envelopeStyle.ts        Editar sobre: paleta, iconos, esquema (nombre único) y tono del papel
+domain/gestures.ts             Gestos: toque vs. deslizamiento y qué hace cada uno según el estado
 errors/organizer-errors.ts     WebGLUnavailableError (caso esperado: se reporta como aviso)
 components/
   OrganizerExperience.tsx      Composición a pantalla completa y medición de la "zona libre"
@@ -79,6 +80,22 @@ actualiza saldos y agrega un movimiento en cada sobre. "Editar" cambia nombre, c
 e icono con vista previa en vivo (en escritorio el diálogo va a la derecha para no
 tapar la carpeta). Todo vive en `useDemoLedger`: en memoria, se pierde al recargar.
 La capa de datos real (fase 2) reemplaza ese hook sin tocar la escena.
+
+## Gestos (táctil y mouse)
+
+| Estado | ← → | ↑ | ↓ |
+|---|---|---|---|
+| Cerrada | ← abre (la tapa sigue al dedo) | — | — |
+| Abierta / enfocado | sobre siguiente/anterior | sobre el enfocado: lo saca; sobre otro: lo enfoca | — |
+| Sobre fuera | — | lo abre | lo regresa |
+| Sobre abierto | documento siguiente/anterior | sobre un ticket: lo saca | cierra el sobre |
+| Documento fuera | documento siguiente/anterior | — | lo regresa |
+
+Mientras se arrastra, la tapa o el sobre siguen al dedo; si el gesto no alcanza
+(distancia o velocidad), vuelven a su lugar. En "cerrada" y "abierta" el lienzo usa
+`touch-action: pan-y` (deslizar en vertical desplaza la página); con un sobre
+elegido usa `none` y recibe todos los gestos. En pantallas táctiles una pista arriba
+del lienzo dice qué gesto aplica. Vibración corta (Android) al reconocer un gesto.
 
 ## Fondo fotográfico
 

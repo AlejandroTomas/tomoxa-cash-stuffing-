@@ -7,6 +7,7 @@ import { toast } from "@/core/toast";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import type { Transfer } from "../domain/transfer";
 import type { EnvelopeItem } from "../mocks/envelopes.mock";
+import { swipeHint } from "../domain/gestures";
 import type { OrganizerView } from "../domain/organizerView";
 import { cn } from "@/lib/utils";
 import { DocumentsPanel } from "./DocumentsPanel";
@@ -126,8 +127,14 @@ export function OrganizerExperience() {
           {view.stage === "closed" ? "Abrir carpeta" : "Cerrar carpeta"}
           <ChevronRight className="size-5" aria-hidden="true" />
         </button>
+        {!unavailable && (
+          // Pista de gestos solo en pantallas táctiles.
+          <p aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-2 hidden justify-center pointer-coarse:flex">
+            <span className="rounded-full bg-card/60 px-3 py-1 text-xs text-foreground/75 backdrop-blur-md">{swipeHint(view.stage)}</span>
+          </p>
+        )}
         <p id="organizer-help" className="sr-only">
-          Representación visual de la carpeta. Usa los botones de los sobres o el teclado: flechas para cambiar de sobre y Escape para regresar.
+          Representación visual de la carpeta. Usa los botones de los sobres o el teclado: flechas para cambiar de sobre y Escape para regresar. En pantallas táctiles también puedes deslizar.
         </p>
         <p className="sr-only" aria-live="polite">
           {announce(view, envelopes)}
