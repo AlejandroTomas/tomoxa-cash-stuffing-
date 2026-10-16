@@ -11,11 +11,11 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { KIND_LABELS, type EnvelopeDocument } from "../domain/document";
+import { KIND_LABELS, signOf, type EnvelopeDocument } from "../domain/document";
 import { describeFilter, EMPTY_FILTER, quickFilters, weekStartOf, type DateFilter, type DocumentFilter } from "../domain/documentFilter";
 import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
 import type { Stage } from "../domain/organizerView";
-import type { EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeItem } from "../domain/envelopeView";
 import { DOCUMENT } from "../scene/layout";
 import { formatAmount } from "./EnvelopeDetailCard";
 import { HandwrittenText } from "./HandwrittenText";
@@ -42,7 +42,6 @@ const WEEKDAYS = [
   { day: 0, short: "D", name: "domingo" },
 ];
 
-const SIGN: Record<EnvelopeDocument["kind"], string> = { income: "+ ", expense: "− ", payment: "− ", assignment: "" };
 
 interface DocumentsPanelProps {
   item: EnvelopeItem;
@@ -228,7 +227,7 @@ export function DocumentsPanel({ item, stage, busy, documents, visible, document
             </div>
             <p className="mt-2 text-sm font-medium text-foreground">{picked.concept}</p>
             <p className="text-3xl font-semibold tracking-tight text-foreground">
-              {SIGN[picked.kind]}
+              {signOf(picked)}
               {formatAmount(picked.amountMinor / 100)}
             </p>
             <div className="mt-3 flex items-center gap-2">
@@ -264,7 +263,7 @@ export function DocumentsPanel({ item, stage, busy, documents, visible, document
                   </span>
                 </span>
                 <span className="shrink-0 font-medium text-foreground tabular-nums">
-                  {SIGN[doc.kind]}
+                  {signOf(doc)}
                   {formatAmount(doc.amountMinor / 100)}
                 </span>
               </button>

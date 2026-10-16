@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EnvelopeIcon } from "../mocks/envelopes.mock";
+import type { EnvelopeIcon } from "../domain/envelopeView";
 
 /** Colores de plástico disponibles al editar un sobre (paleta de datos, igual en ambos temas). */
 export const ENVELOPE_PALETTE = ["#7f9fe6", "#ee8586", "#7cc3a3", "#ecb46c", "#ad94db", "#949eae", "#e48fb6", "#6fbcc6"] as const;

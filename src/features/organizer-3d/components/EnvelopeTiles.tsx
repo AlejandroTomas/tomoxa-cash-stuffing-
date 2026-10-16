@@ -1,7 +1,8 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { EnvelopeId, EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
 interface EnvelopeTilesProps {
@@ -9,6 +10,8 @@ interface EnvelopeTilesProps {
   selectedId: EnvelopeId;
   busy: boolean;
   onSelect: (id: EnvelopeId) => void;
+  /** Si se pueden crear más sobres, muestra la ficha "Nuevo". */
+  onCreate?: () => void;
   className?: string;
 }
 
@@ -16,9 +19,15 @@ interface EnvelopeTilesProps {
  * Fila de sobres (alternativa HTML al lienzo, navegable con teclado). Los
  * colores son datos del sobre, iguales en ambos temas.
  */
-export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, className }: EnvelopeTilesProps) {
+export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, onCreate, className }: EnvelopeTilesProps) {
+  const count = envelopes.length + (onCreate ? 1 : 0);
   return (
-    <ul aria-label="Sobres" className={cn("grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:gap-4", className)}>
+    <ul
+      aria-label="Sobres"
+      className={cn("grid grid-cols-3 gap-2.5 sm:grid-cols-[repeat(var(--tiles),minmax(0,1fr))] lg:gap-3", className)}
+      // En pantallas anchas, una sola fila con todos los sobres (y la ficha "Nuevo").
+      style={{ ["--tiles" as string]: count }}
+    >
       {envelopes.map((envelope) => {
         const Icon = ENVELOPE_ICONS[envelope.icon];
         const selected = envelope.id === selectedId;
@@ -45,6 +54,19 @@ export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, className
           </li>
         );
       })}
+      {onCreate && (
+        <li>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCreate}
+            className="flex aspect-[6/5] w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-card/80 bg-card/35 px-2 text-sm font-medium text-foreground/70 outline-none backdrop-blur-md transition-colors hover:bg-card/55 focus-visible:ring-[3px] focus-visible:ring-ring/60 lg:text-[0.95rem]"
+          >
+            <Plus className="size-7 lg:size-8" strokeWidth={1.7} aria-hidden="true" />
+            Nuevo
+          </button>
+        </li>
+      )}
     </ul>
   );
 }

@@ -2,47 +2,47 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportError } from "@/core/logger";
+import type { MovementDraft } from "@/features/ledger/domain/validation";
 import { describeFilter, EMPTY_FILTER, filterDocuments, type DocumentFilter } from "../domain/documentFilter";
-import { swipeCommand } from "../domain/gestures";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
-import type { Transfer } from "../domain/transfer";
-import { neighborEnvelope, type EnvelopeId } from "../mocks/envelopes.mock";
-import { useDemoLedger } from "./useDemoLedger";
+import { neighborEnvelope, type EnvelopeId } from "../domain/envelopeView";
+import { swipeCommand } from "../domain/gestures";
 import { backAction, initialView, isEnvelopeOut, transitionView, type OrganizerAction, type OrganizerView } from "../domain/organizerView";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "../scene/organizerScene";
+import { useLedgerData } from "./useLedgerData";
 
-/**
- * Orquesta la máquina de estados y la escena: una acción a la vez, la UI se
- * bloquea mientras anima y el estado cambia cuando la animación termina.
- * Sin escena (sin WebGL) las transiciones son instantáneas.
- */
-/** Sobre que se muestra en la tarjeta de detalle al entrar. */
+/** Sobre que se muestra en la tarjeta de detalle al entrar (si existe). */
 export const DEFAULT_ENVELOPE: EnvelopeId = "card";
 
+/**
+ * Orquesta la máquina de estados, la escena y el libro: una acción a la vez, la
+ * UI se bloquea mientras anima y el estado cambia cuando la animación termina.
+ * Sin escena (sin WebGL) las transiciones son instantáneas.
+ */
 export function useOrganizerController() {
+  const ledger = useLedgerData();
+  const { envelopes, documentsFor, withStyle } = ledger;
   const [view, setView] = useState<OrganizerView>(initialView);
-  /** Último sobre elegido: la tarjeta de detalle lo muestra aunque la carpeta esté cerrada. */
-  const [selectedId, setSelectedId] = useState<EnvelopeId>(DEFAULT_ENVELOPE);
+  const [chosenId, setSelectedId] = useState<EnvelopeId>(DEFAULT_ENVELOPE);
   const [busy, setBusy] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const sceneRef = useRef<OrganizerSceneApi | null>(null);
   const viewRef = useRef<OrganizerView>(initialView);
   const busyRef = useRef(false);
+
+  /** Último sobre elegido; si ya no existe (archivado), el primero de la carpeta. */
+  const selectedId = envelopes.some((item) => item.id === chosenId) ? chosenId : (envelopes[0]?.id ?? chosenId);
   const selectedIdRef = useRef(selectedId);
+  const envelopesRef = useRef(envelopes);
   useEffect(() => {
     selectedIdRef.current = selectedId;
-  }, [selectedId]);
+    envelopesRef.current = envelopes;
+  }, [selectedId, envelopes]);
 
   // ── Documentos del sobre seleccionado y su filtro ─────────────────────────
-  const ledger = useDemoLedger();
-  const { documentsFor, recordTransfer, saveStyle, withStyle, envelopeOf } = ledger;
   const [filter, setFilterState] = useState<DocumentFilter>(EMPTY_FILTER);
   const documents = useMemo(() => documentsFor(selectedId), [documentsFor, selectedId]);
-  const envelopesRef = useRef(ledger.envelopes);
-  useEffect(() => {
-    envelopesRef.current = ledger.envelopes;
-  }, [ledger.envelopes]);
   const visibleDocuments = useMemo(() => filterDocuments(documents, filter), [documents, filter]);
   const documentsRef = useRef({ all: documents, visible: visibleDocuments });
   const filterRef = useRef(filter);
@@ -108,6 +108,13 @@ export function useOrganizerController() {
     }
   }, [perform]);
 
+  /** Carpeta abierta y ningún sobre fuera ni enfocado (para mover dinero o reacomodar). */
+  const settleBinder = useCallback(async () => {
+    if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
+    await putEnvelopeBack();
+    if (viewRef.current.stage === "focused") await perform({ type: "CLEAR_FOCUS" });
+  }, [perform, putEnvelopeBack]);
+
   /** Lleva a cualquier sobre al frente desde cualquier estado (abre o regresa lo necesario). */
   const selectEnvelope = useCallback(
     async (id: EnvelopeId) => {
@@ -132,57 +139,87 @@ export function useOrganizerController() {
 
   /** Abre o cierra la carpeta (el botón "Abrir carpeta"). */
   const toggleBinder = useCallback(async () => {
-    if (viewRef.current.stage === "closed") {
-      // Abre con todos los sobres en su lugar; el seleccionado se ve en la tarjeta.
-      await perform({ type: "OPEN" });
-    } else await perform({ type: "CLOSE" });
+    if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
+    else await perform({ type: "CLOSE" });
   }, [perform]);
 
   const step = useCallback(
-    (direction: -1 | 1) => void selectEnvelope(neighborEnvelope(viewRef.current.activeId ?? selectedIdRef.current, direction)),
+    (direction: -1 | 1) => {
+      const ids = envelopesRef.current.map((item) => item.id);
+      const next = neighborEnvelope(ids, viewRef.current.activeId ?? selectedIdRef.current, direction);
+      if (next) void selectEnvelope(next);
+    },
     [selectEnvelope],
   );
 
-  /**
-   * Mueve dinero (demo): deja la carpeta abierta y sin sobres fuera, anima las
-   * fichas y luego actualiza saldos y movimientos. Devuelve si se aplicó.
-   */
+  /** Ejecuta `task` con la interfaz bloqueada (animaciones + guardado). */
+  const runBusy = useCallback(async <T,>(context: string, task: () => Promise<T>): Promise<T | null> => {
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      return await task();
+    } catch (error) {
+      // Los errores de los thunks ya los muestra el panel de alertas.
+      reportError(error, { context });
+      return null;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, []);
+
+  /** Mueve dinero entre sobres: anima las fichas y registra el movimiento (ya validado). */
   const moveMoney = useCallback(
-    async (transfer: Transfer): Promise<boolean> => {
-      if (busyRef.current) return false;
-      if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
-      await putEnvelopeBack();
-      if (viewRef.current.stage === "focused") await perform({ type: "CLEAR_FOCUS" });
-      busyRef.current = true;
-      setBusy(true);
-      try {
-        await sceneRef.current?.transfer(transfer.from, transfer.to);
-        recordTransfer(transfer);
-        setSelectedId(transfer.to);
+    async (draft: MovementDraft): Promise<boolean> => {
+      if (busyRef.current || draft.kind !== "assignment" || !draft.envelopeId || !draft.toEnvelopeId) return false;
+      await settleBinder();
+      const from = draft.envelopeId;
+      const to = draft.toEnvelopeId;
+      const done = await runBusy("organizer3d.transfer", async () => {
+        await sceneRef.current?.transfer(from, to);
+        await ledger.record(draft);
         return true;
-      } catch (error) {
-        reportError(error, { context: "organizer3d.transfer" });
-        return false;
-      } finally {
-        busyRef.current = false;
-        setBusy(false);
-      }
+      });
+      if (done) setSelectedId(to);
+      return Boolean(done);
     },
-    [perform, putEnvelopeBack, recordTransfer],
+    [ledger, runBusy, settleBinder],
   );
 
   /** Vista previa en vivo del estilo en la carpeta; `null` vuelve al estilo guardado. */
   const previewStyle = useCallback(
-    (id: EnvelopeId, style: EnvelopeStyle | null) => sceneRef.current?.restyleEnvelope(style ? withStyle(id, style) : envelopeOf(id)),
-    [withStyle, envelopeOf],
+    (id: EnvelopeId, style: EnvelopeStyle | null) => {
+      const item = style ? withStyle(id, style) : envelopesRef.current.find((envelope) => envelope.id === id);
+      if (item) sceneRef.current?.restyleEnvelope(item);
+    },
+    [withStyle],
   );
 
-  const commitStyle = useCallback(
-    (id: EnvelopeId, style: EnvelopeStyle) => {
-      saveStyle(id, style);
-      sceneRef.current?.restyleEnvelope(withStyle(id, style));
+  /** Guarda nombre, color, icono y descripción (la carpeta se actualiza sola al cambiar los datos). */
+  const commitStyle = useCallback((id: EnvelopeId, style: EnvelopeStyle) => runBusy("organizer3d.saveEnvelope", () => ledger.saveStyle(id, style)), [ledger, runBusy]);
+
+  /** Crea un sobre: la carpeta se reacomoda y el nuevo queda seleccionado. */
+  const createEnvelope = useCallback(
+    async (style: EnvelopeStyle) => {
+      await settleBinder();
+      const created = await runBusy("organizer3d.createEnvelope", () => ledger.createEnvelope(style));
+      if (created) setSelectedId(created.id);
+      return created;
     },
-    [saveStyle, withStyle],
+    [ledger, runBusy, settleBinder],
+  );
+
+  /** Archiva un sobre vacío: sale de la carpeta y se elige su vecino. */
+  const archiveEnvelope = useCallback(
+    async (id: EnvelopeId) => {
+      await settleBinder();
+      const ids = envelopesRef.current.map((item) => item.id);
+      const neighbor = neighborEnvelope(ids.filter((other) => other !== id), null, 1);
+      const archived = await runBusy("organizer3d.archiveEnvelope", () => ledger.archive(id));
+      if (archived && neighbor) setSelectedId(neighbor);
+      return archived;
+    },
+    [ledger, runBusy, settleBinder],
   );
 
   /** Saca el documento siguiente/anterior entre los que pasan el filtro. */
@@ -260,27 +297,34 @@ export function useOrganizerController() {
     sceneRef.current?.setSafeArea(area);
   }, []);
 
-  const onReady = useCallback(
-    (api: OrganizerSceneApi | null) => {
-      sceneRef.current = api;
-      if (api && safeAreaRef.current) api.setSafeArea(safeAreaRef.current);
-      // Una escena nueva (p. ej. recarga en caliente) recibe los nombres y colores editados.
-      if (api) envelopesRef.current.forEach((item) => api.restyleEnvelope(item));
-      setSceneReady(Boolean(api));
-      if (!api) return;
-      // Se difiere un tick: en desarrollo StrictMode monta, desmonta y vuelve a
-      // montar la escena; solo la instancia que sobrevive recibe la intro.
-      window.setTimeout(() => {
-        if (sceneRef.current !== api) return;
-        const { stage, activeId } = viewRef.current;
-        // Intro: la carpeta se abre sola y muestra el sobre seleccionado.
-        if (stage === "closed") void toggleBinder();
-        // Escena nueva con el estado ya avanzado (p. ej. recarga en caliente): alcanzarlo.
-        else void syncScene(api, stage, activeId);
-      }, 0);
-    },
-    [toggleBinder, syncScene],
-  );
+  const onReady = useCallback((api: OrganizerSceneApi | null) => {
+    sceneRef.current = api;
+    if (api && safeAreaRef.current) api.setSafeArea(safeAreaRef.current);
+    setSceneReady(Boolean(api));
+  }, []);
+
+  // Los sobres del libro llegan a la escena (y la reacomodan si cambian).
+  useEffect(() => {
+    if (sceneReady && ledger.loaded) void sceneRef.current?.setEnvelopes(envelopes);
+  }, [sceneReady, ledger.loaded, envelopes]);
+
+  // Intro: con la escena lista y el libro cargado, la carpeta se abre sola. Se
+  // difiere un tick: en desarrollo StrictMode monta la escena dos veces y solo la
+  // instancia que sobrevive debe recibirla.
+  const introFor = useRef<OrganizerSceneApi | null>(null);
+  useEffect(() => {
+    const api = sceneRef.current;
+    if (!sceneReady || !ledger.loaded || !api || introFor.current === api) return;
+    const timer = window.setTimeout(async () => {
+      if (sceneRef.current !== api) return;
+      introFor.current = api;
+      await api.setEnvelopes(envelopesRef.current);
+      const { stage, activeId } = viewRef.current;
+      if (stage === "closed") void toggleBinder();
+      else void syncScene(api, stage, activeId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [sceneReady, ledger.loaded, toggleBinder, syncScene]);
 
   // Teclado: flechas cambian de sobre, Escape retrocede. No interfiere con campos ni diálogos.
   useEffect(() => {
@@ -307,12 +351,16 @@ export function useOrganizerController() {
   return {
     view,
     selectedId,
-    envelopes: ledger.envelopes,
-    balances: ledger.balances,
+    loaded: ledger.loaded,
+    envelopes,
+    balanceOf: ledger.balanceOf,
     activityFor: ledger.activityFor,
+    checkDraft: ledger.checkDraft,
     moveMoney,
     previewStyle,
     commitStyle,
+    createEnvelope,
+    archiveEnvelope,
     documents,
     visibleDocuments,
     filter,

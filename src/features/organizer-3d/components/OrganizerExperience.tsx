@@ -6,8 +6,10 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { toast } from "@/core/toast";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
-import type { Transfer } from "../domain/transfer";
-import type { EnvelopeItem } from "../mocks/envelopes.mock";
+import { MAX_ACTIVE_ENVELOPES } from "@/features/ledger/domain/envelopes";
+import type { MovementDraft } from "@/features/ledger/domain/validation";
+import { showDialog } from "@/utils/dialogService";
+import type { EnvelopeItem } from "../domain/envelopeView";
 import { swipeHint } from "../domain/gestures";
 import type { OrganizerView } from "../domain/organizerView";
 import { cn } from "@/lib/utils";
@@ -53,11 +55,11 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
 
 /**
  * Aurora Organizer: carpeta 3D a pantalla completa con la interfaz de vidrio
- * encima (navegación, detalle del sobre, fila de sobres). Solo visual: los
- * importes vienen del mock y nada mueve dinero real.
+ * encima (navegación, detalle del sobre, fila de sobres). Los saldos y
+ * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, envelopes, balances, activityFor, moveMoney, previewStyle, commitStyle, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+  const { view, selectedId, envelopes, activityFor, checkDraft, moveMoney, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
     useOrganizerController();
   const reduceMotion = useReducedMotion();
   const sceneRef = useRef<HTMLElement>(null);
@@ -65,18 +67,35 @@ export function OrganizerExperience() {
   const cardRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
   const tilesRef = useRef<HTMLDivElement>(null);
-  const item = envelopes.find((envelope) => envelope.id === selectedId) ?? envelopes[0];
-  const [dialog, setDialog] = useState<"move" | "edit" | null>(null);
-  const itemId = item.id;
+  // `undefined` mientras el libro carga del dispositivo.
+  const item: EnvelopeItem | undefined = envelopes.find((envelope) => envelope.id === selectedId) ?? envelopes[0];
+  const [dialog, setDialog] = useState<"move" | "edit" | "create" | null>(null);
+  const itemId = item?.id ?? "";
   const onPreview = useCallback((style: EnvelopeStyle | null) => previewStyle(itemId, style), [previewStyle, itemId]);
-  const otherNames = useMemo(() => envelopes.filter((envelope) => envelope.id !== item.id).map((envelope) => envelope.name), [envelopes, item.id]);
+  const otherNames = useMemo(
+    () => envelopes.filter((envelope) => dialog === "create" || envelope.id !== itemId).map((envelope) => envelope.name),
+    [envelopes, itemId, dialog],
+  );
 
-  const onTransfer = async (transfer: Transfer) => {
-    const done = await moveMoney(transfer);
-    if (!done) return;
-    const name = (id: string) => envelopes.find((envelope) => envelope.id === id)?.name ?? "";
-    toast.success(`Moviste ${formatAmount(transfer.amountMinor / 100)} de ${name(transfer.from)} a ${name(transfer.to)}. Demostración: no se guarda.`);
+  const onTransfer = async (draft: MovementDraft) => {
+    if (!(await moveMoney(draft))) return;
+    const name = (id?: string) => envelopes.find((envelope) => envelope.id === id)?.name ?? "";
+    toast.success(`Moviste ${formatAmount(draft.amountMinor / 100)} de ${name(draft.envelopeId)} a ${name(draft.toEnvelopeId)}.`);
   };
+
+  const onArchive = (target: EnvelopeItem) =>
+    showDialog({
+      type: "question",
+      title: `¿Archivar ${target.name}?`,
+      message: "Sale de la carpeta y su historial se conserva. Solo se archivan sobres vacíos.",
+      confirmText: "Archivar",
+      cancelText: "Cancelar",
+      onConfirm: () => {
+        void archiveEnvelope(target.id).then((archived) => {
+          if (archived) toast.success(`${target.name} se archivó.`);
+        });
+      },
+    });
 
   // La carpeta se encuadra en la parte del lienzo que no tapa la interfaz.
   useEffect(() => {
@@ -153,11 +172,21 @@ export function OrganizerExperience() {
 
       <div className="relative z-10 flex flex-col gap-4 px-3 pb-6 lg:contents">
         <div ref={tilesRef} className="lg:absolute lg:right-[1.6%] lg:bottom-[2.6%] lg:z-10 lg:w-[min(51%,1000px)]">
-          <EnvelopeTiles envelopes={envelopes} selectedId={selectedId} busy={busy} onSelect={(id) => void selectEnvelope(id)} />
+          <EnvelopeTiles
+            envelopes={envelopes}
+            selectedId={selectedId}
+            busy={busy}
+            onSelect={(id) => void selectEnvelope(id)}
+            onCreate={envelopes.length < MAX_ACTIVE_ENVELOPES ? () => setDialog("create") : undefined}
+          />
         </div>
         <div ref={cardRef} className="lg:absolute lg:top-[13%] lg:right-[2%] lg:z-10 lg:w-[min(27.5%,540px)] lg:min-w-[380px]">
           <AnimatePresence mode="wait" initial={false}>
-            {view.stage === "browsing" || view.stage === "reading" ? (
+            {!item ? (
+              <motion.div key="loading" {...cardSwap(reduceMotion)} className={cn("rounded-[1.75rem] p-6 text-sm text-muted-foreground", glass)}>
+                Abriendo tu libro…
+              </motion.div>
+            ) : view.stage === "browsing" || view.stage === "reading" ? (
               <motion.div
                 key="documents"
                 {...cardSwap(reduceMotion)}
@@ -189,6 +218,7 @@ export function OrganizerExperience() {
                   activity={activityFor(item.id)}
                   onMoveMoney={() => setDialog("move")}
                   onEdit={() => setDialog("edit")}
+                  onArchive={() => onArchive(item)}
                   stage={view.stage}
                   busy={busy}
                   onExtract={() => void extractSelected()}
@@ -203,21 +233,27 @@ export function OrganizerExperience() {
           </AnimatePresence>
         </div>
       </div>
-      <MoveMoneyDialog
-        open={dialog === "move"}
-        onOpenChange={(open) => setDialog(open ? "move" : null)}
-        envelopes={envelopes}
-        balances={balances}
-        defaultFrom={item.id}
-        onConfirm={(transfer) => void onTransfer(transfer)}
-      />
+      {item && (
+        <MoveMoneyDialog
+          open={dialog === "move"}
+          onOpenChange={(open) => setDialog(open ? "move" : null)}
+          envelopes={envelopes}
+          defaultFrom={item.id}
+          checkDraft={checkDraft}
+          onConfirm={(draft) => void onTransfer(draft)}
+        />
+      )}
       <EditEnvelopeDialog
-        open={dialog === "edit"}
-        onOpenChange={(open) => setDialog(open ? "edit" : null)}
-        item={item}
+        open={dialog === "edit" || dialog === "create"}
+        onOpenChange={(open) => setDialog(open ? dialog : null)}
+        item={dialog === "edit" ? (item ?? null) : null}
         otherNames={otherNames}
+        usedColors={envelopes.map((envelope) => envelope.color)}
         onPreview={onPreview}
-        onSave={(style) => commitStyle(item.id, style)}
+        onSave={(style) => {
+          if (dialog === "create") void createEnvelope(style).then((created) => created && toast.success(`${created.name} está en la carpeta.`));
+          else if (item) void commitStyle(item.id, style);
+        }}
       />
     </main>
   );

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { KIND_LABELS, type DocumentKind, type EnvelopeDocument } from "../domain/document";
+import { KIND_LABELS, signOf, type DocumentKind, type EnvelopeDocument } from "../domain/document";
 import { parseLocalDate } from "@/utils/localDate";
 import { DOCUMENT } from "./layout";
 
@@ -9,11 +9,11 @@ const WIDTH = 512;
 const HEIGHT = Math.round((WIDTH * DOCUMENT.height) / DOCUMENT.width);
 
 /** Papel e insignia por tipo de movimiento (paleta propia del ticket, igual en ambos temas). */
-const KIND_STYLE: Record<DocumentKind, { paper: string; ink: string; sign: string }> = {
-  income: { paper: "#f3fbf6", ink: "#2f7a55", sign: "+" },
-  expense: { paper: "#fffdf8", ink: "#b0473f", sign: "−" },
-  assignment: { paper: "#fbf7ef", ink: "#8a6a2c", sign: "→" },
-  payment: { paper: "#f3f6fd", ink: "#3d5ea8", sign: "−" },
+const KIND_STYLE: Record<DocumentKind, { paper: string; ink: string }> = {
+  income: { paper: "#f3fbf6", ink: "#2f7a55" },
+  expense: { paper: "#fffdf8", ink: "#b0473f" },
+  assignment: { paper: "#fbf7ef", ink: "#8a6a2c" },
+  payment: { paper: "#f3f6fd", ink: "#3d5ea8" },
 };
 
 const money = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -54,7 +54,7 @@ function draw(ctx: CanvasRenderingContext2D, doc: EnvelopeDocument) {
   ctx.fillText(doc.concept, 36, 140, WIDTH - 72);
   ctx.fillStyle = style.ink;
   ctx.font = `700 58px ${font}`;
-  ctx.fillText(`${style.sign} $ ${money.format(doc.amountMinor / 100)}`, 36, 215, WIDTH - 72);
+  ctx.fillText(`${signOf(doc)}$ ${money.format(doc.amountMinor / 100)}`, 36, 215, WIDTH - 72);
 
   // Cuerpo del ticket: renglones punteados y pie de demostración.
   ctx.strokeStyle = "#d8d3c8";

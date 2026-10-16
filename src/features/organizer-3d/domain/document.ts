@@ -1,11 +1,12 @@
-import type { EnvelopeId } from "../mocks/envelopes.mock";
+import type { Movement } from "@/features/ledger/domain/types";
+import type { EnvelopeId } from "./envelopeView";
 
 /** Qué representa un movimiento respecto al sobre. */
 export type DocumentKind = "income" | "expense" | "assignment" | "payment";
 
 /**
- * Un documento dentro del sobre = un movimiento (ticket, comprobante, apartado).
- * Misma forma que tendrá en la fase 2 cuando venga del libro de movimientos.
+ * Un documento dentro del sobre = un movimiento del libro visto desde ese sobre
+ * (ticket, comprobante, apartado). Se deriva con `documentsFromLedger`.
  */
 export interface EnvelopeDocument {
   id: string;
@@ -14,8 +15,47 @@ export interface EnvelopeDocument {
   date: string;
   concept: string;
   kind: DocumentKind;
-  /** Monto en centavos, siempre positivo; `kind` indica la dirección. */
+  /** Si el dinero entró o salió de este sobre. */
+  direction: "in" | "out";
+  /** Monto en centavos, siempre positivo; `direction` indica el signo. */
   amountMinor: number;
+  /** Movimiento del libro del que sale (para cancelarlo). */
+  movementId: string;
+}
+
+/** Signo para mostrar un documento: "+ " si entró, "− " si salió. */
+export const signOf = (document: Pick<EnvelopeDocument, "direction">) => (document.direction === "in" ? "+ " : "− ");
+
+/**
+ * Los movimientos del libro que tocan el sobre, vistos desde él. Los cancelados
+ * y sus cancelaciones no aparecen (en conjunto no cambian nada).
+ */
+export function documentsFromLedger(envelopeId: EnvelopeId, movements: readonly Movement[], reversed: Readonly<Record<string, string>>): EnvelopeDocument[] {
+  const documents: EnvelopeDocument[] = [];
+  const add = (movement: Movement, kind: DocumentKind, direction: "in" | "out", concept = movement.concept) =>
+    documents.push({ id: `${movement.id}:${direction}`, envelopeId, date: movement.date, concept, kind, direction, amountMinor: movement.amountMinor, movementId: movement.id });
+  for (const movement of movements) {
+    if (movement.kind === "reversal" || reversed[movement.id]) continue;
+    switch (movement.kind) {
+      case "income":
+        if (movement.envelopeId === envelopeId) add(movement, "income", "in");
+        break;
+      case "expense":
+        if (movement.envelopeId === envelopeId) add(movement, "expense", "out");
+        if (movement.reserveEnvelopeId === envelopeId) add(movement, "assignment", "in", `Reserva: ${movement.concept}`);
+        break;
+      case "assignment":
+        if (movement.envelopeId === envelopeId) add(movement, "assignment", "out");
+        if (movement.toEnvelopeId === envelopeId) add(movement, "assignment", "in");
+        break;
+      case "cardPayment":
+        if (movement.reserveEnvelopeId === envelopeId) add(movement, "payment", "out");
+        break;
+      case "accountTransfer":
+        break;
+    }
+  }
+  return sortByRecent(documents);
 }
 
 export const KIND_LABELS: Record<DocumentKind, string> = {

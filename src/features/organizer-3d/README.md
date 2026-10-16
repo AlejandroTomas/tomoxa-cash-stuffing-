@@ -3,19 +3,19 @@
 Página de inicio (`/`; `/organizer` redirige ahí): carpeta de cuero sintético en
 3D con seis sobres plásticos extraíbles y una interfaz de vidrio encima, según
 `aurora-organizer-3d/public/assets/reference/aurora-concept.png`.
-**Los importes, movimientos y fechas son mock** (`mocks/envelopes.mock.ts`, única
-fuente) y nada aquí mueve, guarda ni sincroniza dinero. "Mover dinero" y "Editar"
-solo muestran un aviso.
+Los saldos, movimientos y sobres vienen del **libro de movimientos**
+(`features/ledger`), guardado en el dispositivo. El organizador solo los muestra y
+anima; las acciones ("Mover dinero", crear/editar/archivar sobres) pasan por los
+thunks del libro, que validan y guardan.
 
 ## Piezas
 
 ```
-mocks/envelopes.mock.ts        Sobres de demostración (nombre, color, icono, importe)
-mocks/documents.mock.ts        Movimientos ficticios de cada sobre (única fuente; la tarjeta cuenta de aquí)
+domain/envelopeView.ts         Lo que la carpeta necesita de un sobre (desde el libro) y el sobre vecino
 domain/organizerView.ts        Máquina de estados visual: closed → open → focused ⇄ extracted ⇄ browsing ⇄ reading
-domain/document.ts             Documento = movimiento; actividad derivada (movimientos, último)
+domain/document.ts             Documento = movimiento del libro visto desde un sobre (entra/sale); actividad
 domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, texto) y la frase que los describe
-domain/transfer.ts             Mover dinero: validar monto/saldo, aplicar, movimientos que deja
+domain/transfer.ts             Formulario "Mover dinero": esquema y lectura del monto (las reglas son del libro)
 domain/envelopeStyle.ts        Editar sobre: paleta, iconos, esquema (nombre único) y tono del papel
 domain/gestures.ts             Gestos: toque vs. deslizamiento y qué hace cada uno según el estado
 errors/organizer-errors.ts     WebGLUnavailableError (caso esperado: se reporta como aviso)
@@ -28,8 +28,8 @@ components/
   DocumentsPanel.tsx           Sobre abierto: frase en caligrafía, filtros, lista y documento fuera
   HandwrittenText.tsx · fonts.ts  Caligrafía Caveat (next/font) que "se escribe" letra por letra
   MoveMoneyDialog.tsx          "Mover dinero" (Credenza + react-hook-form + Zod)
-  EditEnvelopeDialog.tsx       "Editar sobre" con vista previa en vivo en la carpeta
-  useDemoLedger.ts             Estado de DEMOSTRACIÓN en memoria (saldos, estilos, movimientos nuevos)
+  EditEnvelopeDialog.tsx       Crear o editar un sobre (al editar, vista previa en vivo en la carpeta)
+  useLedgerData.ts             El libro visto por el organizador (selectores y thunks de `ledger`)
   OrganizerBackdrop.tsx/.css   Fondo de habitación desenfocada (CSS; foto opcional)
   OrganizerCanvas.tsx          Monta/desmonta la escena (solo cliente, next/dynamic ssr:false)
 scene/                         Three.js directo, sin React
@@ -77,14 +77,14 @@ papel sobre el sobre. Tocar un ticket (o la lista) lo saca al frente; Escape ret
 un nivel. El sobre presentado siempre queda delante de la pila; en pantallas angostas
 se achica en lugar de meterse entre los demás. Spec: `.ia/tasks/sobre-documentos-y-busqueda.md`.
 
-## Mover dinero y editar sobres (demostración)
+## Mover dinero, crear, editar y archivar sobres
 
-"Mover dinero" valida el monto contra el saldo del origen, cierra el diálogo y anima
-fichas que salen de la boca del sobre de origen y caen en la del destino; después
-actualiza saldos y agrega un movimiento en cada sobre. "Editar" cambia nombre, color
-e icono con vista previa en vivo (en escritorio el diálogo va a la derecha para no
-tapar la carpeta). Todo vive en `useDemoLedger`: en memoria, se pierde al recargar.
-La capa de datos real (fase 2) reemplaza ese hook sin tocar la escena.
+"Mover dinero" arma un movimiento `assignment` del libro y lo valida con
+`checkMovement` antes de animar; al confirmar, las fichas viajan entre sobres y el
+movimiento se guarda. Crear y archivar reacomodan la carpeta (`setEnvelopes` de la
+escena: los nuevos crecen en su lugar, los archivados se encogen; caben 8 activos).
+Archivar pide confirmación y solo aplica a sobres vacíos. Editar muestra la vista
+previa en vivo y guarda nombre, descripción, color e icono.
 
 ## Gestos (táctil y mouse)
 

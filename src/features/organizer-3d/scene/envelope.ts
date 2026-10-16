@@ -1,11 +1,12 @@
 import * as THREE from "three";
-import type { EnvelopeId, EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { roundedFrame, roundedSlab } from "./geometry";
 import { createLabelTexture, LABEL_ASPECT, redrawLabel } from "./labels";
 import { ENVELOPE, slotPose } from "./layout";
 import type { MaterialKit, PlasticOptions } from "./materials";
 
 export interface EnvelopePart {
+  /** Se actualizan al reacomodar la carpeta (crear, archivar o reordenar sobres). */
   item: EnvelopeItem;
   index: number;
   /** Lo mueven las transiciones (enfocar, extraer, devolver). */
@@ -18,6 +19,8 @@ export interface EnvelopePart {
   setLayer: (base: number) => void;
   /** Recolorea el plástico y reimprime la etiqueta (editar sobre, con vista previa en vivo). */
   restyle: (item: EnvelopeItem) => void;
+  /** Quita el sobre de la escena y libera sus materiales (las geometrías son compartidas). */
+  dispose: () => void;
 }
 
 const EW = ENVELOPE.width;
@@ -59,9 +62,9 @@ export function createEnvelopeGeometries(): EnvelopeGeometries {
  * soldadura perimetral, labio superior, pestañas de color y etiqueta impresa.
  * Solo representa: no conoce ni modifica montos.
  */
-export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialKit, geo: EnvelopeGeometries, maxAnisotropy: number): EnvelopePart {
+export function createEnvelope(item: EnvelopeItem, index: number, count: number, kit: MaterialKit, geo: EnvelopeGeometries, maxAnisotropy: number): EnvelopePart {
   const group = new THREE.Group();
-  const slot = slotPose(index);
+  const slot = slotPose(index, false, count);
   group.position.set(slot.x, slot.y, slot.z);
   const hover = new THREE.Group();
   group.add(hover);
@@ -135,5 +138,17 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
     redrawLabel(labelTexture, next);
   };
 
-  return { item, index, group, hover, mouth, setLayer, restyle };
+  const own = (): Array<THREE.Material | THREE.Texture> => {
+    const resources = new Set<THREE.Material | THREE.Texture>([labelTexture]);
+    hover.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.material !== kit.zipperTeeth && object.material !== kit.chrome) resources.add(object.material as THREE.Material);
+    });
+    return [...resources];
+  };
+  const dispose = () => {
+    group.removeFromParent();
+    kit.release(...own());
+  };
+
+  return { item, index, group, hover, mouth, setLayer, restyle, dispose };
 }

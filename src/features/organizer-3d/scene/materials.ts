@@ -19,6 +19,8 @@ export interface MaterialKit {
   paper: (tone: string) => THREE.MeshStandardMaterial;
   plastic: (color: string, options: PlasticOptions) => THREE.MeshPhysicalMaterial;
   track: <T extends THREE.Material | THREE.Texture>(resource: T) => T;
+  /** Libera recursos de un objeto que se quita antes del final (p. ej. un sobre archivado). */
+  release: (...resources: Array<THREE.Material | THREE.Texture>) => void;
   dispose: () => void;
 }
 
@@ -123,6 +125,11 @@ export function createMaterialKit(maxAnisotropy: number, manager?: THREE.Loading
         normalScale: new THREE.Vector2(0.18, 0.18),
         envMapIntensity: 0.9,
       })),
+    release: (...resources) =>
+      resources.forEach((resource) => {
+        owned.delete(resource);
+        resource.dispose();
+      }),
     dispose: () => {
       owned.forEach((resource) => resource.dispose());
       owned.clear();

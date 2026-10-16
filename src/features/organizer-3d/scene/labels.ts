@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { EnvelopeIcon, EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeIcon, EnvelopeItem } from "../domain/envelopeView";
 
 /**
  * Trazos de los iconos de Lucide (ISC, ya instalado como `lucide-react`) en

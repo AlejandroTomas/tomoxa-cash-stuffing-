@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { checkTransfer, transferFormSchema, type Balances, type Transfer, type TransferForm } from "../domain/transfer";
-import type { EnvelopeId, EnvelopeItem } from "../mocks/envelopes.mock";
+import type { LedgerIssue, MovementDraft } from "@/features/ledger/domain/validation";
+import { toLocalIsoDate } from "@/utils/localDate";
+import { parseAmountMinor, transferFormSchema, type TransferForm } from "../domain/transfer";
+import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { formatAmount } from "./EnvelopeDetailCard";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
@@ -25,10 +27,11 @@ interface MoveMoneyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   envelopes: readonly EnvelopeItem[];
-  balances: Balances;
   defaultFrom: EnvelopeId;
-  /** Se llama con la transferencia ya validada, después de cerrar el diálogo (para ver la animación). */
-  onConfirm: (transfer: Transfer) => void;
+  /** Reglas del libro (las mismas que aplica el servicio al guardar). */
+  checkDraft: (draft: MovementDraft) => LedgerIssue | null;
+  /** Se llama con el movimiento ya validado, después de cerrar el diálogo (para ver la animación). */
+  onConfirm: (draft: MovementDraft) => void;
 }
 
 const minorToInput = (minor: number) => (minor / 100).toFixed(2).replace(/\.00$/, "");
@@ -45,7 +48,7 @@ export function MoveMoneyDialog({ open, onOpenChange, ...props }: MoveMoneyDialo
   );
 }
 
-function EnvelopeSelect({ id, value, onChange, envelopes, balances, invalid }: { id: string; value: string; onChange: (value: string) => void; envelopes: readonly EnvelopeItem[]; balances: Balances; invalid: boolean }) {
+function EnvelopeSelect({ id, value, onChange, envelopes, invalid }: { id: string; value: string; onChange: (value: string) => void; envelopes: readonly EnvelopeItem[]; invalid: boolean }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger id={id} aria-invalid={invalid} className="h-11 w-full rounded-xl">
@@ -58,7 +61,7 @@ function EnvelopeSelect({ id, value, onChange, envelopes, balances, invalid }: {
             <SelectItem key={item.id} value={item.id}>
               <Icon className="size-4" style={{ color: item.color }} aria-hidden="true" />
               {item.name}
-              <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">{formatAmount(balances[item.id] / 100)}</span>
+              <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">{formatAmount(item.amount)}</span>
             </SelectItem>
           );
         })}
@@ -67,7 +70,7 @@ function EnvelopeSelect({ id, value, onChange, envelopes, balances, invalid }: {
   );
 }
 
-function MoveMoneyForm({ envelopes, balances, defaultFrom, onConfirm, onClose }: Omit<MoveMoneyDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
+function MoveMoneyForm({ envelopes, defaultFrom, checkDraft, onConfirm, onClose }: Omit<MoveMoneyDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
   const firstOther = envelopes.find((item) => item.id !== defaultFrom)?.id ?? defaultFrom;
   const {
     control,
@@ -79,16 +82,31 @@ function MoveMoneyForm({ envelopes, balances, defaultFrom, onConfirm, onClose }:
   } = useForm<TransferForm>({ resolver: zodResolver(transferFormSchema), defaultValues: { from: defaultFrom, to: firstOther, amount: "" } });
   const from = useWatch({ control, name: "from" }) as EnvelopeId;
   const to = useWatch({ control, name: "to" });
-  const available = balances[from] ?? 0;
+  const available = Math.round((envelopes.find((item) => item.id === from)?.amount ?? 0) * 100);
+  const nameOf = (id: string) => envelopes.find((item) => item.id === id)?.name ?? "";
 
   const onSubmit = (form: TransferForm) => {
-    const check = checkTransfer(form, balances);
-    if (!check.ok) {
-      setError(check.field, { message: check.message });
+    const amountMinor = parseAmountMinor(form.amount);
+    if (amountMinor === null) {
+      setError("amount", { message: "Escribe un monto válido, por ejemplo 250 o 99.90." });
+      return;
+    }
+    const draft: MovementDraft = {
+      kind: "assignment",
+      date: toLocalIsoDate(new Date()),
+      concept: `${nameOf(form.from)} → ${nameOf(form.to)}`,
+      amountMinor,
+      envelopeId: form.from,
+      toEnvelopeId: form.to,
+    };
+    const issue = checkDraft(draft);
+    if (issue) {
+      const field = issue.field === "envelopeId" ? "from" : issue.field === "toEnvelopeId" ? "to" : "amount";
+      setError(field, { message: issue.message });
       return;
     }
     onClose();
-    onConfirm(check.transfer);
+    onConfirm(draft);
   };
 
   const swap = () => {
@@ -111,7 +129,7 @@ function MoveMoneyForm({ envelopes, balances, defaultFrom, onConfirm, onClose }:
           <Controller
             control={control}
             name="from"
-            render={({ field }) => <EnvelopeSelect id="move-from" value={field.value} onChange={field.onChange} envelopes={envelopes} balances={balances} invalid={Boolean(errors.from)} />}
+            render={({ field }) => <EnvelopeSelect id="move-from" value={field.value} onChange={field.onChange} envelopes={envelopes} invalid={Boolean(errors.from)} />}
           />
           {errors.from && <p className="text-xs text-destructive">{errors.from.message}</p>}
         </div>
@@ -125,7 +143,7 @@ function MoveMoneyForm({ envelopes, balances, defaultFrom, onConfirm, onClose }:
           <Controller
             control={control}
             name="to"
-            render={({ field }) => <EnvelopeSelect id="move-to" value={field.value} onChange={field.onChange} envelopes={envelopes} balances={balances} invalid={Boolean(errors.to)} />}
+            render={({ field }) => <EnvelopeSelect id="move-to" value={field.value} onChange={field.onChange} envelopes={envelopes} invalid={Boolean(errors.to)} />}
           />
           {errors.to && <p className="text-xs text-destructive">{errors.to.message}</p>}
         </div>

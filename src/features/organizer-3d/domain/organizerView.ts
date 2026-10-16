@@ -1,4 +1,4 @@
-import type { EnvelopeId } from "../mocks/envelopes.mock";
+import type { EnvelopeId } from "./envelopeView";
 
 /**
  * closed → open → focused ⇄ extracted ⇄ browsing ⇄ reading

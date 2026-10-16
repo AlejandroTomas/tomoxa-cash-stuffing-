@@ -1,12 +1,11 @@
 import { fitDistance, fovFor, frameFor, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, RINGS, slotPose } from "../scene/layout";
-import { envelopesMock } from "../mocks/envelopes.mock";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
 
 describe("bolsillos de los sobres", () => {
-  const flat = envelopesMock.map((_, index) => slotPose(index));
-  const fanned = envelopesMock.map((_, index) => slotPose(index, true));
+  const flat = Array.from({ length: 6 }, (_, index) => slotPose(index));
+  const fanned = Array.from({ length: 6 }, (_, index) => slotPose(index, true));
 
   it("los seis sobres caben dentro de la tapa trasera", () => {
     for (const pose of flat) {
@@ -136,13 +135,36 @@ describe("abanico de documentos", () => {
 
 describe("salir y volver al bolsillo sin atravesar", () => {
   it("al subir POCKET_CLEARANCE, el borde inferior libra el borde superior del sobre de enfrente", () => {
-    for (let i = 0; i < envelopesMock.length - 1; i++) {
+    for (let i = 0; i < 5; i++) {
       const own = slotPose(i, true);
       const front = slotPose(i + 1, true);
       const half = ENVELOPE.height / 2;
       const ownBottom = own.y + POCKET_CLEARANCE * Math.cos(own.rx) - half * Math.cos(own.rx);
       const frontTop = front.y + half * Math.cos(front.rx);
       expect(ownBottom).toBeGreaterThan(frontTop + 0.2);
+    }
+  });
+});
+
+describe("cualquier número de sobres", () => {
+  it("con 1 a 8 sobres todos caben en la tapa y conservan su orden", () => {
+    for (let count = 1; count <= 8; count++) {
+      const poses = Array.from({ length: count }, (_, index) => slotPose(index, false, count));
+      for (const pose of poses) {
+        expect(pose.y + ENVELOPE.height / 2).toBeLessThan(BINDER.height / 2);
+        expect(pose.y - ENVELOPE.height / 2).toBeGreaterThan(-BINDER.height / 2);
+        expect(pose.z + 0.06).toBeLessThan(BINDER.frontZ);
+      }
+      for (let i = 1; i < count; i++) expect(poses[i].y).toBeLessThan(poses[i - 1].y);
+    }
+  });
+  it("con más sobres se aprietan, pero siguen librándose al salir del bolsillo", () => {
+    expect(stackLayout(8).stagger).toBeLessThan(stackLayout(6).stagger);
+    for (const count of [6, 7, 8]) {
+      const own = slotPose(2, true, count);
+      const front = slotPose(3, true, count);
+      const half = ENVELOPE.height / 2;
+      expect(own.y + pocketClearance(count) * Math.cos(own.rx) - half * Math.cos(own.rx)).toBeGreaterThan(front.y + half * Math.cos(front.rx) + 0.2);
     }
   });
 });

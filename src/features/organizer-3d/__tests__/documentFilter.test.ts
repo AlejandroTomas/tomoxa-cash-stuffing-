@@ -1,10 +1,11 @@
-import { sortByRecent, summarizeActivity, type EnvelopeDocument } from "../domain/document";
+import { computeBalances } from "@/features/ledger/domain/balances";
+import { SEED_ACCOUNTS, SEED_ENVELOPES, seedMovements } from "@/features/ledger/domain/seed";
+import type { Movement } from "@/features/ledger/domain/types";
+import { documentsFromLedger, signOf, sortByRecent, summarizeActivity, type EnvelopeDocument } from "../domain/document";
 import { describeFilter, EMPTY_FILTER, filterDocuments, isEmptyFilter, normalizeText, quickFilters, weekStartOf, type DocumentFilter } from "../domain/documentFilter";
 import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
-import { documentsMock, documentsOf } from "../mocks/documents.mock";
-import { envelopesMock } from "../mocks/envelopes.mock";
 
-const doc = (id: string, date: string, concept = "Súper"): EnvelopeDocument => ({ id, envelopeId: "week", date, concept, kind: "expense", amountMinor: 1000 });
+const doc = (id: string, date: string, concept = "Súper"): EnvelopeDocument => ({ id, envelopeId: "week", date, concept, kind: "expense", direction: "out", amountMinor: 1000, movementId: id });
 const ids = (docs: EnvelopeDocument[]) => docs.map((d) => d.id);
 const withDate = (date: DocumentFilter["date"], text = ""): DocumentFilter => ({ date, text });
 
@@ -81,24 +82,42 @@ describe("describeFilter (la frase en caligrafía)", () => {
   });
 });
 
-describe("mock de documentos", () => {
-  it("ids únicos y montos enteros en centavos", () => {
-    expect(new Set(documentsMock.map((d) => d.id)).size).toBe(documentsMock.length);
-    for (const d of documentsMock) {
-      expect(Number.isInteger(d.amountMinor)).toBe(true);
-      expect(d.amountMinor).toBeGreaterThan(0);
-      expect(toLocalIsoDate(parseLocalDate(d.date))).toBe(d.date);
+describe("documentos de cada sobre, desde el libro", () => {
+  const movements = seedMovements();
+  const reversed = computeBalances({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements }).reversed;
+  const docsOf = (id: string, list: readonly Movement[] = movements, rev = reversed) => documentsFromLedger(id, list, rev);
+
+  it("cada sobre tiene movimientos, más recientes primero, y su actividad se deriva de ellos", () => {
+    for (const { id } of SEED_ENVELOPES) {
+      const docs = docsOf(id);
+      expect(docs.length).toBeGreaterThan(0);
+      expect(docs).toEqual(sortByRecent(docs));
+      expect(summarizeActivity(docs)).toEqual({ movements: docs.length, lastMovement: docs[0].date });
     }
   });
-  it("cada sobre tiene movimientos y su actividad se deriva de ellos", () => {
-    for (const { id } of envelopesMock) {
-      const docs = documentsOf(id);
-      const activity = summarizeActivity(docs);
-      expect(activity.movements).toBe(docs.length);
-      expect(activity.movements).toBeGreaterThan(0);
-      expect(activity.lastMovement).toBe(sortByRecent(docs)[0].date);
-    }
-    expect(summarizeActivity(documentsOf("card"))).toEqual({ movements: 8, lastMovement: "2026-10-06" });
+
+  it("un reparto sale de un sobre y entra al otro", () => {
+    const moved = movements.find((m) => m.kind === "assignment" && m.toEnvelopeId === "week")!;
+    expect(docsOf("available").find((d) => d.movementId === moved.id)).toMatchObject({ direction: "out", kind: "assignment" });
+    expect(docsOf("week").find((d) => d.movementId === moved.id)).toMatchObject({ direction: "in", kind: "assignment" });
   });
+
+  it("la compra con tarjeta es gasto en su sobre y reserva en Tarjeta; el pago sale de Tarjeta", () => {
+    const purchase = movements.find((m) => m.concept === "Súper con tarjeta")!;
+    expect(docsOf("week").find((d) => d.movementId === purchase.id)).toMatchObject({ kind: "expense", direction: "out" });
+    expect(docsOf("card").find((d) => d.movementId === purchase.id)).toMatchObject({ kind: "assignment", direction: "in", concept: "Reserva: Súper con tarjeta" });
+    const payment = movements.find((m) => m.kind === "cardPayment")!;
+    expect(docsOf("card").find((d) => d.movementId === payment.id)).toMatchObject({ kind: "payment", direction: "out" });
+    expect(signOf({ direction: "in" })).toBe("+ ");
+  });
+
+  it("lo cancelado no aparece", () => {
+    const moved = movements.find((m) => m.kind === "assignment" && m.toEnvelopeId === "savings")!;
+    const reversal: Movement = { id: "rev", kind: "reversal", date: "2026-10-15", createdAt: "2026-10-15T00:00:00Z", concept: "Cancelación", amountMinor: moved.amountMinor, reversalOf: moved.id };
+    const list = [...movements, reversal];
+    const rev = computeBalances({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: list }).reversed;
+    expect(docsOf("savings", list, rev).some((d) => d.movementId === moved.id || d.movementId === "rev")).toBe(false);
+  });
+
   it("sin documentos no hay último movimiento", () => expect(summarizeActivity([])).toEqual({ movements: 0, lastMovement: null }));
 });

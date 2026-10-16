@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import type { EnvelopeActivity } from "../domain/document";
 import { parseLocalDate } from "@/utils/localDate";
-import type { EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeItem } from "../domain/envelopeView";
 import type { Stage } from "../domain/organizerView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
@@ -29,6 +29,7 @@ interface EnvelopeDetailCardProps {
   activity: EnvelopeActivity;
   onMoveMoney: () => void;
   onEdit: () => void;
+  onArchive: () => void;
   stage: Stage;
   busy: boolean;
   onExtract: () => void;
@@ -43,7 +44,7 @@ interface EnvelopeDetailCardProps {
 export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
 /** Tarjeta de vidrio con el detalle del sobre seleccionado. Importes de demostración. */
-export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onEdit, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onEdit, onArchive, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const index = envelopes.findIndex((envelope) => envelope.id === item.id);
@@ -83,6 +84,9 @@ export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onE
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={busy || stage === "closed"} onSelect={onBack}>
                   {extracted ? "Regresar a la carpeta" : "Atrás"}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={busy} onSelect={onArchive}>
+                  Archivar sobre
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

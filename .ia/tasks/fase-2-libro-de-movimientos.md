@@ -1,6 +1,6 @@
 # Fase 2: libro de movimientos (datos reales, solo en el dispositivo)
 
-**Estado:** en curso (2026-10-15). Modelo aprobado; fases 1–3 (dominio, persistencia, servicios + Redux) hechas.
+**Estado:** en curso (2026-10-15). Modelo aprobado; fases 1–4 hechas (dominio, persistencia, servicios + Redux, organizador conectado). Sigue la 5 (formularios de ingreso/gasto/pago, cuentas y ajustes).
 **Base:** `aurora-organizer-3d/docs/FASE_02_FINANZAS.md` (reglas originales).
 
 ## Decisiones tomadas

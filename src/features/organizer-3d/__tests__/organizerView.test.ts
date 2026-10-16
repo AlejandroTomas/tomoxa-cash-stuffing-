@@ -1,5 +1,7 @@
 import { backAction, initialView, transitionView, type OrganizerView } from "../domain/organizerView";
-import { envelopesMock, neighborEnvelope } from "../mocks/envelopes.mock";
+import { neighborEnvelope } from "../domain/envelopeView";
+
+const IDS = ["available", "card", "savings", "cash", "week", "fund"];
 
 const open = transitionView(initialView, { type: "OPEN" });
 const focused = transitionView(open, { type: "FOCUS", id: "card" });
@@ -31,7 +33,7 @@ describe("transitionView", () => {
     expect(transitionView(initialView, { type: "CLOSE" })).toBe(initialView);
   });
   it("cada uno de los seis sobres se puede enfocar y extraer", () => {
-    for (const { id } of envelopesMock) {
+    for (const id of IDS) {
       const view = transitionView(transitionView(open, { type: "FOCUS", id }), { type: "EXTRACT" });
       expect(view).toEqual({ stage: "extracted", activeId: id, documentId: null });
     }
@@ -71,10 +73,11 @@ describe("backAction", () => {
 
 describe("neighborEnvelope", () => {
   it("recorre la lista en círculo", () => {
-    expect(neighborEnvelope(null, 1)).toBe("available");
-    expect(neighborEnvelope(null, -1)).toBe("fund");
-    expect(neighborEnvelope("fund", 1)).toBe("available");
-    expect(neighborEnvelope("available", -1)).toBe("fund");
-    expect(neighborEnvelope("card", 1)).toBe("savings");
+    expect(neighborEnvelope(IDS, null, 1)).toBe("available");
+    expect(neighborEnvelope(IDS, null, -1)).toBe("fund");
+    expect(neighborEnvelope(IDS, "fund", 1)).toBe("available");
+    expect(neighborEnvelope(IDS, "available", -1)).toBe("fund");
+    expect(neighborEnvelope(IDS, "card", 1)).toBe("savings");
+    expect(neighborEnvelope([], null, 1)).toBeNull();
   });
 });

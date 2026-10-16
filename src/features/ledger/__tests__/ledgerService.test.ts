@@ -62,6 +62,17 @@ describe("ledgerService", () => {
     expect(await service.archiveEnvelope("trip")).toMatchObject({ archived: true });
   });
 
+  it("caben 8 sobres activos; para crear otro hay que archivar uno", async () => {
+    const { service } = setup();
+    await service.load(); // 6 sobres
+    const make = (id: string) => service.saveEnvelope({ id, name: id, description: "", color: "#6fbcc6", icon: "wallet", order: 0, archived: false });
+    await make("seven");
+    await make("eight");
+    await expect(make("nine")).rejects.toMatchObject({ code: "TOO_MANY" });
+    await service.archiveEnvelope("eight");
+    await expect(make("nine")).resolves.toMatchObject({ id: "nine" });
+  });
+
   it("los saldos se recalculan con lo guardado (sobreviven a recargar)", async () => {
     const { service } = setup();
     await service.load();

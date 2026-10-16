@@ -5,11 +5,13 @@ import type { Account, Envelope, EnvelopeIcon } from "./types";
 export const UNASSIGNED_ENVELOPE_ID = "available";
 
 export const ENVELOPE_NAME_MAX = 16;
+/** Cuántos sobres activos caben en la carpeta con sus etiquetas legibles. */
+export const MAX_ACTIVE_ENVELOPES = 8;
 export const ENVELOPE_DESCRIPTION_MAX = 60;
 export const ENVELOPE_ICONS: readonly EnvelopeIcon[] = ["wallet", "card", "piggy", "banknote", "calendar", "chart"];
 
 export interface EnvelopeIssue {
-  code: "INVALID_NAME" | "NAME_TAKEN" | "INVALID_DESCRIPTION" | "INVALID_COLOR" | "INVALID_ICON" | "PROTECTED" | "NOT_EMPTY";
+  code: "INVALID_NAME" | "NAME_TAKEN" | "TOO_MANY" | "INVALID_DESCRIPTION" | "INVALID_COLOR" | "INVALID_ICON" | "PROTECTED" | "NOT_EMPTY";
   field: "name" | "description" | "color" | "icon" | "form";
   message: string;
 }
@@ -18,6 +20,10 @@ const normalize = (name: string) => name.trim().toLocaleLowerCase("es");
 
 /** Reglas para crear o editar un sobre. `envelopes` son todos los existentes. */
 export function checkEnvelope(envelope: Envelope, envelopes: readonly Envelope[]): EnvelopeIssue | null {
+  const isNew = !envelopes.some((other) => other.id === envelope.id);
+  if (isNew && envelopes.filter((other) => !other.archived).length >= MAX_ACTIVE_ENVELOPES) {
+    return { code: "TOO_MANY", field: "form", message: `Caben ${MAX_ACTIVE_ENVELOPES} sobres en la carpeta: archiva uno para crear otro.` };
+  }
   const name = envelope.name.trim();
   if (!name || name.length > ENVELOPE_NAME_MAX) return { code: "INVALID_NAME", field: "name", message: `Ponle un nombre (máximo ${ENVELOPE_NAME_MAX} caracteres).` };
   if (envelopes.some((other) => other.id !== envelope.id && !other.archived && normalize(other.name) === normalize(name))) {

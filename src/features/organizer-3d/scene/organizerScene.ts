@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { gsap } from "gsap";
-import { envelopesMock, type EnvelopeId, type EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { createBinder } from "./binder";
 import { createEnvelope, createEnvelopeGeometries, type EnvelopePart } from "./envelope";
 import { fovFor, presentDepth, rigFor, subFov, type CameraRig, type Viewport } from "./framing";
@@ -9,7 +9,7 @@ import { classifyGesture, TAP_SLOP, type SwipeDirection } from "../domain/gestur
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, FOCUS_LIFT, focusPose, insidePose, POCKET_CLEARANCE, slotPose, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, FOCUS_LIFT, focusPose as focusPoseOf, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 
@@ -48,6 +48,11 @@ export interface OrganizerSceneApi {
   transfer: (from: EnvelopeId, to: EnvelopeId) => Promise<void>;
   /** Aplica nombre, color e icono a un sobre (vista previa en vivo y guardado). */
   restyleEnvelope: (item: EnvelopeItem) => void;
+  /**
+   * Sobres de la carpeta, en orden. Si solo cambió su estilo, se reestilizan; si
+   * cambió qué sobres hay, la carpeta se reacomoda (con un sobre fuera, espera a que regrese).
+   */
+  setEnvelopes: (items: readonly EnvelopeItem[]) => Promise<void>;
   setSafeArea: (area: SafeArea) => void;
   onIntent: (callback: ((intent: SceneIntent) => void) | null) => void;
   dispose: () => void;
@@ -59,8 +64,6 @@ type SceneStage = "closed" | "open" | "focused" | "extracted" | "browsing" | "re
 const VIEW_DIR = new THREE.Vector3(0, 0.08, 1).normalize();
 const STRAP_OPEN = Math.PI / 2 + 0.14;
 const STRAP_TAB_OPEN = Math.PI / 2 - 0.08;
-/** Cuánto sube el sobre para salir del bolsillo antes de venir al frente (libra a los de enfrente). */
-const LIFT = POCKET_CLEARANCE;
 /** Pose de presentación del sobre extraído: compensa la inclinación de la carpeta para mirar a cámara. */
 const EXTRACTED = { rx: -BINDER.tilt.x * 0.88, ry: -BINDER.tilt.y * 0.7 - 0.06, rz: -BINDER.tilt.z * 0.8, scale: 1.06 };
 /** Z mínima del sobre presentado: por delante del sobre más cercano en abanico. */
@@ -101,10 +104,17 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const binder = createBinder(kit);
   tilt.add(binder.group);
   const geometries = createEnvelopeGeometries();
-  const parts = envelopesMock.map((item, index) => createEnvelope(item, index, kit, geometries, maxAnisotropy));
-  parts.forEach((part) => binder.group.add(part.group));
-  const byId = new Map<EnvelopeId, EnvelopePart>(parts.map((part) => [part.item.id, part]));
-  const envelopeTargets = parts.map((part) => part.hover);
+  // Los sobres llegan del libro con `setEnvelopes` (y se reacomodan si cambian).
+  let parts: EnvelopePart[] = [];
+  let byId = new Map<EnvelopeId, EnvelopePart>();
+  let envelopeTargets: THREE.Object3D[] = [];
+  function indexParts() {
+    byId = new Map(parts.map((part) => [part.item.id, part]));
+    envelopeTargets = parts.map((part) => part.hover);
+  }
+  // Poses según cuántos sobres hay en la carpeta.
+  const slotPose = (index: number, fanned = false) => slotPoseOf(index, fanned, parts.length);
+  const focusPose = (index: number) => focusPoseOf(index, true, parts.length);
   const coverShadowOpacity = kit.contactShadow.opacity;
 
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -167,6 +177,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
             settle = null;
             if (reframePending) snapFraming();
             resolve();
+            // Cambios de sobres que llegaron con un sobre fuera: se aplican ya de regreso.
+            const pending = pendingItems;
+            if (pending && (stage === "closed" || stage === "open" || stage === "focused")) void setEnvelopes(pending);
           },
         });
         build(tl);
@@ -208,7 +221,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   /** Arriba de su bolsillo, en su mismo plano. */
   function abovePocket(index: number): SlotPose {
     const slot = slotPose(index, true);
-    return { ...slot, y: slot.y + LIFT * Math.cos(slot.rx), z: slot.z + LIFT * Math.sin(slot.rx) + 0.05 };
+    // Sube lo suficiente para librar a los de enfrente.
+    const lift = pocketClearance(parts.length);
+    return { ...slot, y: slot.y + lift * Math.cos(slot.rx), z: slot.z + lift * Math.sin(slot.rx) + 0.05 };
   }
 
   /**
@@ -598,6 +613,60 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     });
   }
 
+  let pendingItems: readonly EnvelopeItem[] | null = null;
+
+  async function setEnvelopes(items: readonly EnvelopeItem[]) {
+    if (disposed) return;
+    const sameSet = items.length === parts.length && items.every((item, index) => parts[index].item.id === item.id);
+    if (sameSet) {
+      items.forEach((item, index) => {
+        parts[index].item = item;
+        parts[index].restyle(item);
+      });
+      wake(800);
+      return;
+    }
+    // Con un sobre fuera de la carpeta no se reacomoda: se aplica al regresar.
+    if (stage === "extracted" || stage === "browsing" || stage === "reading" || running) {
+      pendingItems = items;
+      return;
+    }
+    pendingItems = null;
+    const previous = new Map(parts.map((part) => [part.item.id, part]));
+    const next = items.map((item, index) => {
+      const existing = previous.get(item.id);
+      if (existing) {
+        previous.delete(item.id);
+        existing.index = index;
+        existing.item = item;
+        existing.restyle(item);
+        return existing;
+      }
+      const created = createEnvelope(item, index, items.length, kit, geometries, maxAnisotropy);
+      created.group.scale.setScalar(0.001);
+      binder.group.add(created.group);
+      return created;
+    });
+    const removed = [...previous.values()];
+    if (activeId && !next.some((part) => part.item.id === activeId)) {
+      activeId = null;
+      if (stage === "focused") stage = "open";
+    }
+    parts = next;
+    indexParts();
+    restingLayers();
+    const fanned = stage !== "closed";
+    await play((tl) => {
+      // Los que se van se encogen; los nuevos crecen en su lugar; todos se reacomodan.
+      removed.forEach((part) => tl.to(part.group.scale, { x: 0.001, y: 0.001, z: 0.001, duration: d(0.3), ease: "power2.in" }, 0));
+      tl.call(() => removed.forEach((part) => part.dispose()), [], d(0.32));
+      parts.forEach((part) => {
+        const focused = stage === "focused" && part.item.id === activeId;
+        toPose(tl, part, focused ? focusPose(part.index) : slotPose(part.index, fanned), d(0.12) + part.index * d(0.03), d(0.55), "back.out(1.3)");
+      });
+    });
+  }
+
   function restyleEnvelope(item: EnvelopeItem) {
     byId.get(item.id)?.restyle(item);
     wake(800);
@@ -842,6 +911,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     returnDocument,
     transfer,
     restyleEnvelope,
+    setEnvelopes,
     setSafeArea: (area) => {
       const same = area.top === safe.top && area.right === safe.right && area.bottom === safe.bottom && area.left === safe.left;
       if (same || disposed) return;

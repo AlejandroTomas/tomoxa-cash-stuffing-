@@ -48,14 +48,30 @@ export interface SlotPose {
   rx: number;
 }
 
+/** Con hasta este número de sobres se usa la separación cómoda; con más, se reparte el mismo espacio. */
+export const COMFORT_COUNT = 6;
+
+export interface StackLayout {
+  stagger: number;
+  depthStep: number;
+}
+
+/** Separación vertical y de profundidad para `count` sobres, sin salirse de la carpeta. */
+export function stackLayout(count: number): StackLayout {
+  if (count <= COMFORT_COUNT) return { stagger: ENVELOPE.stagger, depthStep: ENVELOPE.depthStep };
+  const steps = count - 1;
+  return { stagger: (ENVELOPE.stagger * (COMFORT_COUNT - 1)) / steps, depthStep: (ENVELOPE.depthStep * (COMFORT_COUNT - 1)) / steps };
+}
+
 /**
- * Lugar de reposo del sobre `index`. Cerrada: planos y apilados.
+ * Lugar de reposo del sobre `index` de `count`. Cerrada: planos y apilados.
  * Abierta: girados `fan` sobre su borde inferior (como un archivador).
  */
-export function slotPose(index: number, fanned = false): SlotPose {
+export function slotPose(index: number, fanned = false, count = COMFORT_COUNT): SlotPose {
+  const { stagger, depthStep } = stackLayout(count);
   const x = ENVELOPE.x + index * 0.014;
-  const y = ENVELOPE.topY - index * ENVELOPE.stagger;
-  const z = ENVELOPE.firstZ + index * ENVELOPE.depthStep;
+  const y = ENVELOPE.topY - index * stagger;
+  const z = ENVELOPE.firstZ + index * depthStep;
   if (!fanned) return { x, y, z, rx: 0 };
   const rx = ENVELOPE.fan - index * 0.012;
   const half = ENVELOPE.height / 2;
@@ -68,14 +84,15 @@ export function slotPose(index: number, fanned = false): SlotPose {
  * debe quedar por encima del borde superior del sobre de enfrente, más holgura.
  * Con menos, al ir al frente o al regresar atraviesa a los de enfrente.
  */
-export const POCKET_CLEARANCE = ENVELOPE.height - ENVELOPE.stagger + 0.45;
+export const pocketClearance = (count = COMFORT_COUNT) => ENVELOPE.height - stackLayout(count).stagger + 0.45;
+export const POCKET_CLEARANCE = pocketClearance();
 
 /** Distancia que asoma un sobre enfocado, a lo largo de su propio plano. */
 export const FOCUS_LIFT = 0.42;
 
 /** Pose de "enfocado": asoma hacia arriba dentro de su plano, sin atravesar a los de enfrente. */
-export function focusPose(index: number, fanned = true): SlotPose {
-  const slot = slotPose(index, fanned);
+export function focusPose(index: number, fanned = true, count = COMFORT_COUNT): SlotPose {
+  const slot = slotPose(index, fanned, count);
   return { ...slot, y: slot.y + FOCUS_LIFT * Math.cos(slot.rx), z: slot.z + FOCUS_LIFT * Math.sin(slot.rx) + 0.01 };
 }
 

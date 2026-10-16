@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Pencil } from "lucide-react";
+import { Check, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,15 +17,18 @@ import {
 } from "@/components/ui/responsive-dialog";
 import { cn } from "@/lib/utils";
 import { ENVELOPE_DESCRIPTION_MAX, ENVELOPE_ICON_OPTIONS, ENVELOPE_NAME_MAX, ENVELOPE_PALETTE, envelopeStyleSchema, type EnvelopeStyle } from "../domain/envelopeStyle";
-import type { EnvelopeItem } from "../mocks/envelopes.mock";
+import type { EnvelopeItem } from "../domain/envelopeView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
 interface EditEnvelopeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  item: EnvelopeItem;
+  /** Sobre a editar; `null` = crear uno nuevo. */
+  item: EnvelopeItem | null;
   otherNames: readonly string[];
-  /** Vista previa en vivo en la carpeta; `null` = volver al estilo guardado. */
+  /** Colores ya usados (al crear se sugiere uno libre). */
+  usedColors?: readonly string[];
+  /** Vista previa en vivo en la carpeta (solo al editar); `null` = volver al estilo guardado. */
   onPreview: (style: EnvelopeStyle | null) => void;
   onSave: (style: EnvelopeStyle) => void;
 }
@@ -39,7 +42,7 @@ const ICON_LABELS: Record<EnvelopeItem["icon"], string> = {
   chart: "Gráfica",
 };
 
-/** Editar nombre, color e icono del sobre, con vista previa en la carpeta. Demostración: no se guarda. */
+/** Crear o editar un sobre (nombre, descripción, color e icono); al editar, vista previa en la carpeta. */
 export function EditEnvelopeDialog({ open, onOpenChange, onPreview, ...props }: EditEnvelopeDialogProps) {
   const close = (next: boolean) => {
     if (!next) onPreview(null);
@@ -57,6 +60,7 @@ export function EditEnvelopeDialog({ open, onOpenChange, onPreview, ...props }: 
 function EditEnvelopeForm({
   item,
   otherNames,
+  usedColors = [],
   onPreview,
   onSave,
   onCancel,
@@ -69,14 +73,20 @@ function EditEnvelopeForm({
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<EnvelopeStyle>({ resolver: zodResolver(schema), defaultValues: { name: item.name, description: item.description, color: item.color, icon: item.icon } });
+  } = useForm<EnvelopeStyle>({
+    resolver: zodResolver(schema),
+    defaultValues: item
+      ? { name: item.name, description: item.description, color: item.color, icon: item.icon }
+      : { name: "", description: "", color: ENVELOPE_PALETTE.find((swatch) => !usedColors.includes(swatch)) ?? ENVELOPE_PALETTE[0], icon: "wallet" },
+  });
   const [name, description, color, icon] = useWatch({ control, name: ["name", "description", "color", "icon"] });
-  const previewName = name.trim() || item.name;
+  const previewName = name.trim() || item?.name || "Nuevo sobre";
 
   // La carpeta muestra los cambios mientras se edita.
   useEffect(() => {
+    if (!item) return;
     onPreview({ name: previewName, description: description.trim(), color, icon });
-  }, [previewName, description, color, icon, onPreview]);
+  }, [item, previewName, description, color, icon, onPreview]);
 
   const Icon = ENVELOPE_ICONS[icon];
 
@@ -92,9 +102,9 @@ function EditEnvelopeForm({
     >
       <CredenzaHeader>
         <CredenzaTitle className="flex items-center gap-2">
-          <Pencil className="size-5" aria-hidden="true" /> Editar sobre
+          {item ? <Pencil className="size-5" aria-hidden="true" /> : <Plus className="size-5" aria-hidden="true" />} {item ? "Editar sobre" : "Nuevo sobre"}
         </CredenzaTitle>
-        <CredenzaDescription>Los cambios se ven en la carpeta. Demostración: no se guardan al recargar.</CredenzaDescription>
+        <CredenzaDescription>{item ? "Los cambios se ven en la carpeta mientras editas." : "Aparecerá en la carpeta, al final de la pila."}</CredenzaDescription>
       </CredenzaHeader>
 
       {/* Vista previa en HTML (la carpeta queda detrás del diálogo). */}
