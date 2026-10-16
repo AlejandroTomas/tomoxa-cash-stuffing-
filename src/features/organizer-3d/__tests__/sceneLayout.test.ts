@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, freeNdc, outsideNdc, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
 
@@ -46,15 +46,6 @@ describe("bolsillos de los sobres", () => {
     expect(Math.abs(left - RINGS.x)).toBeLessThan(RINGS.radius);
     expect(RINGS.z - RINGS.radius).toBeLessThan(flat[0].z);
     expect(RINGS.z + RINGS.radius).toBeGreaterThan(flat[flat.length - 1].z);
-  });
-
-  it("enfocar sube el sobre dentro de su plano, sin alcanzar al de enfrente", () => {
-    const slot = slotPose(2, true);
-    const focus = focusPose(2);
-    expect(focus.y).toBeGreaterThan(slot.y);
-    expect(focus.x).toBe(slot.x);
-    expect(focus.rx).toBe(slot.rx);
-    expect(focus.z).toBeLessThan(slotPose(3, true).z + 0.2);
   });
 });
 

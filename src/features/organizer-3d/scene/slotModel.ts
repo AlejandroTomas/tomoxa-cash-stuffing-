@@ -37,7 +37,7 @@ export type FrameKind = "overview" | "open";
 export interface SlotPart {
   item: EnvelopeItem;
   index: number;
-  /** Lo mueven las transiciones (enfocar, extraer, regresar). Rotación en orden YXZ. */
+  /** Lo mueven las transiciones (abrir, regresar, entreabrir). Rotación en orden YXZ. */
   group: THREE.Group;
   /** Lo mueve solo el hover (relativo a `group`); así no compite con las transiciones. */
   hover: THREE.Group;
@@ -61,10 +61,10 @@ export interface SlotModel {
   resize: (count: number) => void;
   /** En su lugar. */
   rest: (index: number, count: number) => Pose;
-  /** Elegida: asoma de su lugar. */
-  focus: (index: number, count: number) => Pose;
+  /** Entreabierta: asoma de su lugar (para recibir o soltar fichas de dinero). */
+  ajar: (index: number, count: number) => Pose;
   /**
-   * Camino de salida desde `focus` hasta la presentación (la última pose). Al
+   * Camino de salida desde `rest` hasta la presentación (la última pose). Al
    * regresar se recorre al revés: así vuelve por donde salió, sin atravesar nada.
    */
   exitPath: (index: number, count: number) => Pose[];

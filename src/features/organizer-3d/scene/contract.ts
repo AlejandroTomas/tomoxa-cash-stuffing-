@@ -5,8 +5,8 @@ import type { SwipeDirection } from "../domain/gestures";
 /**
  * Contrato común de las escenas del organizador (carpeta, cajonera, archivador).
  * El controlador y la interfaz solo conocen esto; cada estilo lo implementa con
- * sus propias animaciones. Equivalencias con "seleccionar / extraer / regresar /
- * reiniciar": `focus`, `extract`, `returnEnvelope`, `clearFocus`.
+ * sus propias animaciones. Tocar un sobre lo saca y lo abre en una sola
+ * animación (`openEnvelope`); `closeEnvelope` lo regresa a su lugar.
  */
 
 /** Lo que el usuario tocó en el lienzo; React decide qué acción corresponde. */
@@ -28,13 +28,13 @@ export interface SafeArea {
 export interface OrganizerSceneApi {
   open: () => Promise<void>;
   close: () => Promise<void>;
-  focus: (id: EnvelopeId) => Promise<void>;
-  extract: (id: EnvelopeId) => Promise<void>;
-  returnEnvelope: (id: EnvelopeId) => Promise<void>;
-  /** Regresa el sobre enfocado a su bolsillo (carpeta abierta, sin selección). */
-  clearFocus: () => Promise<void>;
-  /** Abre el sobre extraído con sus documentos (solo lectura); `visibleIds` = los que pasan el filtro, en orden. */
-  openEnvelope: (documents: readonly EnvelopeDocument[], visibleIds: readonly string[], caption: string) => Promise<void>;
+  /**
+   * Saca el sobre de su lugar y lo abre con sus documentos (solo lectura), en
+   * una sola animación. Con el organizador abierto y ningún sobre fuera.
+   * `visibleIds` = los que pasan el filtro, en orden.
+   */
+  openEnvelope: (id: EnvelopeId, documents: readonly EnvelopeDocument[], visibleIds: readonly string[], caption: string) => Promise<void>;
+  /** Guarda los documentos y regresa el sobre a su lugar. */
   closeEnvelope: () => Promise<void>;
   /** Reacomoda el abanico al cambiar el filtro (el último llamado gana). */
   showDocuments: (visibleIds: readonly string[], caption: string) => void;

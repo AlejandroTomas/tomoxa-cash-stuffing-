@@ -9,7 +9,7 @@ export interface EnvelopePart {
   /** Se actualizan al reacomodar la carpeta (crear, archivar o reordenar sobres). */
   item: EnvelopeItem;
   index: number;
-  /** Lo mueven las transiciones (enfocar, extraer, devolver). */
+  /** Lo mueven las transiciones (abrir y regresar). */
   group: THREE.Group;
   /** Lo mueve solo el hover; así no compite con las transiciones. */
   hover: THREE.Group;

@@ -63,8 +63,8 @@ export function drawerRest(index: number, count: number): Pose {
   return pose({ ...cell, z: cell.z - CABINET.front / 2 + 0.015 });
 }
 
-/** Elegido: sale un tramo, como al jalarlo con un dedo. */
-export function drawerFocus(index: number, count: number): Pose {
+/** Entreabierto (para recibir o soltar fichas): sale un tramo, como al jalarlo con un dedo. */
+export function drawerAjar(index: number, count: number): Pose {
   const rest = drawerRest(index, count);
   return { ...rest, z: rest.z + 0.5 };
 }

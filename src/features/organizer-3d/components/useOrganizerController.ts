@@ -15,6 +15,9 @@ import type { OrganizerStyleId } from "../domain/organizerStyle";
 import { useLedgerData } from "./useLedgerData";
 import { useOrganizerStyle } from "./useOrganizerStyle";
 
+/** Espera al siguiente cuadro (para que React pinte los datos recién guardados). */
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
 /** Cuánto dura el desvanecido del lienzo al cambiar de estilo (ms). */
 const STYLE_FADE_MS = 220;
 
@@ -49,10 +52,12 @@ export function useOrganizerController() {
   const selectedId = envelopes.some((item) => item.id === chosenId) ? chosenId : (envelopes[0]?.id ?? chosenId);
   const selectedIdRef = useRef(selectedId);
   const envelopesRef = useRef(envelopes);
+  const documentsForRef = useRef(documentsFor);
   useEffect(() => {
     selectedIdRef.current = selectedId;
     envelopesRef.current = envelopes;
-  }, [selectedId, envelopes]);
+    documentsForRef.current = documentsFor;
+  }, [selectedId, envelopes, documentsFor]);
 
   // ── Documentos del sobre seleccionado y su filtro ─────────────────────────
   const [filter, setFilterState] = useState<DocumentFilter>(EMPTY_FILTER);
@@ -90,13 +95,11 @@ export function useOrganizerController() {
       if (scene) {
         if (action.type === "OPEN") await scene.open();
         else if (action.type === "CLOSE") await scene.close();
-        else if (action.type === "FOCUS") await scene.focus(action.id);
-        else if (action.type === "CLEAR_FOCUS") await scene.clearFocus();
-        else if (action.type === "EXTRACT" && before.activeId) await scene.extract(before.activeId);
-        else if (action.type === "RETURN" && before.activeId) await scene.returnEnvelope(before.activeId);
         else if (action.type === "OPEN_ENVELOPE") {
-          const { all, visible } = documentsRef.current;
-          await scene.openEnvelope(all, visible.map((doc) => doc.id), describeFilter(filterRef.current));
+          // Otro sobre empieza sin filtro; el mismo conserva el suyo.
+          const all = documentsForRef.current(action.id);
+          const chosen = action.id === selectedIdRef.current ? filterRef.current : EMPTY_FILTER;
+          await scene.openEnvelope(action.id, all, filterDocuments(all, chosen).map((doc) => doc.id), describeFilter(chosen));
         } else if (action.type === "CLOSE_ENVELOPE") await scene.closeEnvelope();
         else if (action.type === "PICK_DOCUMENT") await scene.pickDocument(action.id);
         else if (action.type === "RETURN_DOCUMENT") await scene.returnDocument();
@@ -114,7 +117,7 @@ export function useOrganizerController() {
     }
   }, []);
 
-  /** Guarda lo que esté fuera (documento → solapa → sobre) hasta dejar el sobre enfocado. */
+  /** Guarda lo que esté fuera (documento → sobre) hasta dejar la carpeta abierta sin ningún sobre fuera. */
   const putEnvelopeBack = useCallback(async () => {
     while (isEnvelopeOut(viewRef.current.stage)) {
       const action = backAction(viewRef.current.stage);
@@ -122,34 +125,37 @@ export function useOrganizerController() {
     }
   }, [perform]);
 
-  /** Carpeta abierta y ningún sobre fuera ni enfocado (para mover dinero o reacomodar). */
+  /** Carpeta abierta y ningún sobre fuera (para mover dinero o reacomodar). */
   const settleBinder = useCallback(async () => {
     if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
     await putEnvelopeBack();
-    if (viewRef.current.stage === "focused") await perform({ type: "CLEAR_FOCUS" });
   }, [perform, putEnvelopeBack]);
 
-  /** Lleva a cualquier sobre al frente desde cualquier estado (abre o regresa lo necesario). */
-  const selectEnvelope = useCallback(
+  /** Saca un sobre ya abierto desde cualquier estado (abre la carpeta o regresa el que esté fuera). */
+  const openEnvelope = useCallback(
     async (id: EnvelopeId) => {
       if (busyRef.current) return;
-      if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
       const current = viewRef.current;
-      if (isEnvelopeOut(current.stage)) {
-        if (current.activeId === id) return;
-        await putEnvelopeBack();
-      }
-      await perform({ type: "FOCUS", id });
+      if (isEnvelopeOut(current.stage) && current.activeId === id) return;
+      if (current.stage === "closed") await perform({ type: "OPEN" });
+      await putEnvelopeBack();
+      await perform({ type: "OPEN_ENVELOPE", id });
     },
     [perform, putEnvelopeBack],
   );
 
-  /** Extrae el sobre seleccionado, abriendo y enfocando antes si hace falta. */
-  const extractSelected = useCallback(async () => {
-    if (busyRef.current) return;
-    if (viewRef.current.activeId !== selectedId || viewRef.current.stage !== "focused") await selectEnvelope(selectedId);
-    await perform({ type: "EXTRACT" });
-  }, [perform, selectEnvelope, selectedId]);
+  /** Elige un sobre para la tarjeta de detalle; si hay uno abierto, abre el elegido en su lugar. */
+  const selectEnvelope = useCallback(
+    async (id: EnvelopeId) => {
+      if (busyRef.current) return;
+      if (isEnvelopeOut(viewRef.current.stage)) await openEnvelope(id);
+      else setSelectedId(id);
+    },
+    [openEnvelope],
+  );
+
+  /** Abre el sobre de la tarjeta de detalle. */
+  const openSelected = useCallback(() => openEnvelope(selectedId), [openEnvelope, selectedId]);
 
   /** Abre o cierra la carpeta (el botón "Abrir carpeta"). */
   const toggleBinder = useCallback(async () => {
@@ -160,25 +166,11 @@ export function useOrganizerController() {
   const step = useCallback(
     (direction: -1 | 1) => {
       const ids = envelopesRef.current.map((item) => item.id);
-      const next = neighborEnvelope(ids, viewRef.current.activeId ?? selectedIdRef.current, direction);
+      const next = neighborEnvelope(ids, selectedIdRef.current, direction);
       if (next) void selectEnvelope(next);
     },
     [selectEnvelope],
   );
-
-  /** Guarda los documentos (si el sobre está abierto) sin regresar el sobre. */
-  const closeDocuments = useCallback(async () => {
-    if (viewRef.current.stage === "reading") await perform({ type: "RETURN_DOCUMENT" });
-    if (viewRef.current.stage === "browsing") await perform({ type: "CLOSE_ENVELOPE" });
-  }, [perform]);
-
-  // Tras cancelar un movimiento con el sobre abierto, se vuelve a abrir con sus documentos ya actualizados.
-  const reopenRef = useRef(false);
-  useEffect(() => {
-    if (!reopenRef.current || viewRef.current.stage !== "extracted") return;
-    reopenRef.current = false;
-    void perform({ type: "OPEN_ENVELOPE" });
-  }, [documents, perform]);
 
   /** Ejecuta `task` con la interfaz bloqueada (animaciones + guardado). */
   const runBusy = useCallback(async <T,>(context: string, task: () => Promise<T>): Promise<T | null> => {
@@ -220,8 +212,7 @@ export function useOrganizerController() {
    */
   const animateFlow = useCallback(
     async (flow: MoneyFlow | null) => {
-      const { stage } = viewRef.current;
-      if (!flow || busyRef.current || (stage !== "open" && stage !== "focused")) return;
+      if (!flow || busyRef.current || viewRef.current.stage !== "open") return;
       await runBusy("organizer3d.animateMovement", async () => sceneRef.current?.transfer(flow.from, flow.to));
     },
     [runBusy],
@@ -231,29 +222,32 @@ export function useOrganizerController() {
   const animateMovement = useCallback((movement: Movement) => animateFlow(moneyFlowOf(movement)), [animateFlow]);
 
   /**
-   * Cancela un movimiento. Si el sobre estaba abierto, lo cierra, cancela y lo
-   * vuelve a abrir; si no, las fichas hacen el camino inverso del original.
+   * Cancela un movimiento: regresa el sobre que esté fuera, cancela, las fichas
+   * hacen el camino inverso del original y, si el sobre estaba abierto, se
+   * vuelve a abrir con sus documentos ya actualizados.
    */
   const cancelMovement = useCallback(
     async (movementId: string): Promise<boolean> => {
       if (busyRef.current) return false;
-      const wasOpen = viewRef.current.stage === "browsing" || viewRef.current.stage === "reading";
-      await closeDocuments();
-      // Se marca antes: los documentos cambian en cuanto el libro se actualiza, antes de que termine la promesa.
-      reopenRef.current = wasOpen;
+      const { stage, activeId } = viewRef.current;
+      const reopenId = isEnvelopeOut(stage) ? activeId : null;
+      await putEnvelopeBack();
       let original: Movement | undefined;
       try {
         original = await cancel(movementId);
       } catch (error) {
-        reopenRef.current = false;
         // El error del thunk ya se mostró en las alertas.
         reportError(error, { context: "organizer3d.cancelMovement" });
         return false;
       }
-      if (original && !wasOpen) await animateFlow(reversalFlowOf(original));
+      if (original) await animateFlow(reversalFlowOf(original));
+      if (reopenId) {
+        await nextFrame();
+        await openEnvelope(reopenId);
+      }
       return true;
     },
-    [closeDocuments, cancel, animateFlow],
+    [putEnvelopeBack, cancel, animateFlow, openEnvelope],
   );
 
   /** Vista previa en vivo del estilo en la carpeta; `null` vuelve al estilo guardado. */
@@ -304,7 +298,7 @@ export function useOrganizerController() {
     [perform],
   );
 
-  /** Retrocede un nivel: documento → sobre abierto → extraído → enfocado → abierta → cerrada. */
+  /** Retrocede un nivel: documento → sobre abierto → abierta → cerrada. */
   const back = useCallback(() => {
     const action = backAction(viewRef.current.stage);
     if (action) void perform(action);
@@ -330,15 +324,10 @@ export function useOrganizerController() {
         else void perform({ type: "PICK_DOCUMENT", id: intent.id });
         return;
       }
-      // Con el sobre fuera, tocarlo lo abre; los demás sobres no responden.
-      if (isEnvelopeOut(current.stage)) {
-        if (intent.id === current.activeId && current.stage === "extracted") void perform({ type: "OPEN_ENVELOPE" });
-        return;
-      }
-      if (current.stage === "focused" && intent.id === current.activeId) void perform({ type: "EXTRACT" });
-      else void selectEnvelope(intent.id);
+      // Tocar un sobre lo saca ya abierto (si había otro fuera, ese regresa primero).
+      void openEnvelope(intent.id);
     },
-    [perform, selectEnvelope, step, stepDocument],
+    [perform, openEnvelope, step, stepDocument],
   );
 
   /** Lleva una escena recién creada al estado visual actual, sin pasar por la máquina. */
@@ -347,11 +336,10 @@ export function useOrganizerController() {
     setBusy(true);
     try {
       await api.open();
-      if (activeId && stage !== "open") await api.focus(activeId);
-      if (activeId && isEnvelopeOut(stage)) await api.extract(activeId);
-      if (stage === "browsing" || stage === "reading") {
+      if (activeId && isEnvelopeOut(stage)) {
+        // El sobre abierto es el seleccionado: sus documentos y su filtro son los actuales.
         const { all, visible } = documentsRef.current;
-        await api.openEnvelope(all, visible.map((doc) => doc.id), describeFilter(filterRef.current));
+        await api.openEnvelope(activeId, all, visible.map((doc) => doc.id), describeFilter(filterRef.current));
         if (stage === "reading" && viewRef.current.documentId) await api.pickDocument(viewRef.current.documentId);
       }
     } finally {
@@ -377,7 +365,7 @@ export function useOrganizerController() {
   /**
    * Cambia de organizador sin recargar: el lienzo se desvanece, la escena
    * anterior se libera (timelines, geometrías, contexto WebGL) y la nueva se
-   * monta en el mismo estado (mismo sobre elegido, extraído o no). No toca datos.
+   * monta en el mismo estado (mismo sobre elegido, abierto o no). No toca datos.
    */
   const changeStyle = useCallback(
     (next: OrganizerStyleId) => {
@@ -433,7 +421,7 @@ export function useOrganizerController() {
       const arrows: Record<string, -1 | 1> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
       const direction = arrows[event.key];
       const { stage } = viewRef.current;
-      if (!direction || stage === "closed" || stage === "extracted") return;
+      if (!direction || stage === "closed") return;
       event.preventDefault();
       // Con el sobre abierto las flechas recorren sus documentos.
       if (stage === "browsing" || stage === "reading") stepDocument(direction);
@@ -455,7 +443,6 @@ export function useOrganizerController() {
     moveMoney,
     animateMovement,
     cancelMovement,
-    closeDocuments,
     settleBinder,
     previewStyle,
     commitStyle,
@@ -471,7 +458,7 @@ export function useOrganizerController() {
     unavailable,
     perform,
     selectEnvelope,
-    extractSelected,
+    openSelected,
     toggleBinder,
     step,
     back,

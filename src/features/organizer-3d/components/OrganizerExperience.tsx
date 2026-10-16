@@ -42,10 +42,8 @@ function announce(view: OrganizerView, envelopes: readonly EnvelopeItem[], style
   const { label } = styleInfo(style);
   if (view.stage === "closed") return style === "binder" ? "Carpeta cerrada." : `${label}: vista general.`;
   if (view.stage === "open") return style === "binder" ? "Carpeta abierta. Elige un sobre." : `${label}. Elige un sobre.`;
-  if (view.stage === "focused") return `Sobre ${name} seleccionado.`;
   if (view.stage === "browsing") return `Sobre ${name} abierto. Elige un documento.`;
-  if (view.stage === "reading") return "Documento fuera del sobre.";
-  return `Sobre ${name} fuera de la carpeta.`;
+  return "Documento fuera del sobre.";
 }
 
 /** Cambio entre la tarjeta del sobre y el panel de documentos. */
@@ -69,7 +67,7 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, envelopes, budgets, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, style, changeStyle, canvas } =
+  const { view, selectedId, envelopes, budgets, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, openSelected, toggleBinder, step, back, setSafeArea, style, changeStyle, canvas } =
     useOrganizerController();
   const reduceMotion = useReducedMotion();
   // Antes de leer la preferencia del navegador se muestra la carpeta (no se monta ninguna escena).
@@ -280,9 +278,7 @@ export function OrganizerExperience() {
                   onArchive={() => onArchive(item)}
                   stage={view.stage}
                   busy={busy}
-                  onExtract={() => void extractSelected()}
-                  onOpenEnvelope={() => void perform({ type: "OPEN_ENVELOPE" })}
-                  onShow={() => void selectEnvelope(item.id)}
+                  onOpenEnvelope={() => void openSelected()}
                   onStep={step}
                   onBack={back}
                   className={cardHeight}

@@ -99,15 +99,6 @@ export function slotPose(index: number, fanned = false, count = COMFORT_COUNT): 
 export const pocketClearance = (count = COMFORT_COUNT) => ENVELOPE.height - stackLayout(count).stagger + 0.45;
 export const POCKET_CLEARANCE = pocketClearance();
 
-/** Distancia que asoma un sobre enfocado, a lo largo de su propio plano. */
-export const FOCUS_LIFT = 0.26;
-
-/** Pose de "enfocado": asoma hacia arriba dentro de su plano, sin atravesar a los de enfrente. */
-export function focusPose(index: number, fanned = true, count = COMFORT_COUNT): SlotPose {
-  const slot = slotPose(index, fanned, count);
-  return { ...slot, y: slot.y + FOCUS_LIFT * Math.cos(slot.rx), z: slot.z + FOCUS_LIFT * Math.sin(slot.rx) + 0.01 };
-}
-
 /** Documentos (tickets) dentro de un sobre abierto. */
 export const DOCUMENT = {
   width: 1.25,

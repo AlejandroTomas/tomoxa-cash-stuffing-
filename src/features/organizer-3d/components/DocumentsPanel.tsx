@@ -102,7 +102,7 @@ export function DocumentsPanel({ item, stage, busy, documents, visible, document
             {visible.length > DOCUMENT.maxFan && ` · ${DOCUMENT.maxFan} en el sobre`}
           </p>
         </div>
-        <Button variant="ghost" size="icon" aria-label="Cerrar sobre" disabled={busy || stage === "reading"} onClick={onCloseEnvelope} className="rounded-full bg-card/80">
+        <Button variant="ghost" size="icon" aria-label="Regresar sobre" disabled={busy || stage === "reading"} onClick={onCloseEnvelope} className="rounded-full bg-card/80">
           <X />
         </Button>
       </header>

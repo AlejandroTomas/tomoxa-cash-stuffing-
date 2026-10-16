@@ -42,8 +42,8 @@ export function folderRest(index: number, count: number): Pose {
   return pose({ x, y: FILES.plate + FILES.folderHeight / 2 + 0.004, z: 0 });
 }
 
-/** Elegida: sube un tramo, todavía dentro de su compartimento. */
-export function folderFocus(index: number, count: number): Pose {
+/** Entreabierta (para recibir o soltar fichas): sube un tramo, todavía dentro de su compartimento. */
+export function folderAjar(index: number, count: number): Pose {
   const rest = folderRest(index, count);
   return { ...rest, y: rest.y + 0.62 };
 }

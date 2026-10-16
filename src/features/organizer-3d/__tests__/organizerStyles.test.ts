@@ -1,6 +1,6 @@
 import { isOrganizerStyle, ORGANIZER_STYLES, parseOrganizerStyle, styleInfo } from "../domain/organizerStyle";
-import { CABINET, CABINET_VIEW, cabinetFrame, cabinetSize, cellCenter, drawerExitPath, drawerFocus, drawerPresent, drawerRest, drawerSize, rowsFor } from "../scene/cabinet/cabinetLayout";
-import { FILES, FILES_VIEW, filesSize, folderExitPath, folderFocus, folderPresent, folderRest } from "../scene/files/filesLayout";
+import { CABINET, CABINET_VIEW, cabinetFrame, cabinetSize, cellCenter, drawerExitPath, drawerAjar, drawerPresent, drawerRest, drawerSize, rowsFor } from "../scene/cabinet/cabinetLayout";
+import { FILES, FILES_VIEW, filesSize, folderExitPath, folderAjar, folderPresent, folderRest } from "../scene/files/filesLayout";
 import { apparentSize, facing, normalize, type Pose } from "../scene/slotModel";
 
 describe("estilo del organizador", () => {
@@ -66,7 +66,7 @@ describe("cajonera", () => {
     // El fondo del cajón queda fuera de la cara frontal.
     expect(out.z - CABINET.front / 2 - drawerSize().depth).toBeGreaterThan(CABINET.depth / 2);
     expect(near(present, drawerPresent(6))).toBe(true);
-    expect(drawerFocus(2, 6).z).toBeGreaterThan(rest.z);
+    expect(drawerAjar(2, 6).z).toBeGreaterThan(rest.z);
   });
 
   it("presentado, su fondo no toca la carcasa", () => {
@@ -102,10 +102,10 @@ describe("archivador", () => {
     expect(near(present, folderPresent(6))).toBe(true);
   });
 
-  it("elegida sube pero sigue en su compartimento", () => {
-    const focus = folderFocus(0, 6);
-    expect(focus.y).toBeGreaterThan(folderRest(0, 6).y);
-    expect(focus.y - FILES.folderHeight / 2).toBeLessThan(FILES.plate + FILES.wallHeight);
+  it("entreabierta sube pero sigue en su compartimento", () => {
+    const ajar = folderAjar(0, 6);
+    expect(ajar.y).toBeGreaterThan(folderRest(0, 6).y);
+    expect(ajar.y - FILES.folderHeight / 2).toBeLessThan(FILES.plate + FILES.wallHeight);
   });
 
   it("presentada mira hacia la cámara", () => {

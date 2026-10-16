@@ -13,7 +13,7 @@ thunks del libro, que validan y guardan.
 
 ```
 domain/envelopeView.ts         Lo que la carpeta necesita de un sobre (desde el libro) y el sobre vecino
-domain/organizerView.ts        Máquina de estados visual: closed → open → focused ⇄ extracted ⇄ browsing ⇄ reading
+domain/organizerView.ts        Máquina de estados visual: closed → open ⇄ browsing ⇄ reading
 domain/document.ts             Documento = movimiento del libro visto desde un sobre (entra/sale); actividad
 domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, texto) y la frase que los describe
 domain/transfer.ts             Formulario "Mover dinero": esquema y lectura del monto (las reglas son del libro)
@@ -68,8 +68,10 @@ scene/                         Three.js directo, sin React
   carpeta queda a la izquierda de la tarjeta; en móvil todo se apila.
 - **Intro**: al cargar, la carpeta se abre sola. Se difiere un tick para que en desarrollo
   (StrictMode monta dos veces) solo la escena que sobrevive la reciba.
-- **Enfocar no saca al sobre de su plano** (solo asoma): si avanzara atravesaría a los de
-  enfrente. La extracción sí sale al frente, después de deslizarse hacia arriba.
+- **Un toque abre el sobre**: sin pasos intermedios de "enfocar" ni "extraer". El sobre
+  sube en su plano hasta librar a los de enfrente (si avanzara antes los atravesaría),
+  viene al frente y abre la boca con sus documentos, todo en una sola animación. Al
+  regresar guarda los documentos y vuelve por el mismo camino a su bolsillo.
 - **Cuero de color sólido** con mapas normal/rugosidad: el albedo del mapa era demasiado
   saturado frente al rosa empolvado de la referencia.
 - **Colores de los sobres** son datos (como series de gráfica): van en `style`, iguales en
@@ -80,29 +82,29 @@ scene/                         Three.js directo, sin React
 ## Estilos: carpeta, cajonera y archivador
 
 Todos cumplen `OrganizerSceneApi` (`scene/contract.ts`); el controlador, la máquina de
-estados y la interfaz no saben cuál está montado. Seleccionar, extraer, regresar y
-reiniciar son `focus`, `extract`, `returnEnvelope` y `clearFocus`.
+estados y la interfaz no saben cuál está montado. Sacar el sobre ya abierto y
+regresarlo son `openEnvelope` y `closeEnvelope`.
 
-- **Carpeta** (`organizerScene.ts`): la original, sin cambios de comportamiento.
+- **Carpeta** (`organizerScene.ts`): la original.
 - **Cajonera** y **archivador** usan `slotScene`: un cuerpo fijo y una pieza móvil por
-  sobre. El modelo (`SlotModel`) da geometría y poses (`rest`, `focus`, `exitPath`,
+  sobre. El modelo (`SlotModel`) da geometría y poses (`rest`, `ajar`, `exitPath`,
   encuadres); la escena genérica anima entre poses con timelines de GSAP. Regresar
   recorre `exitPath` al revés, así la pieza vuelve por donde salió sin atravesar nada
-  y termina exactamente en su pose. Al elegir otra pieza, la anterior vuelve antes de
-  que salga la nueva. "Cerrar" en estos estilos es la vista general (cámara más lejos).
+  y termina exactamente en su pose. Al tocar otra pieza con una fuera, la anterior
+  vuelve antes de que salga la nueva. "Cerrar" en estos estilos es la vista general
+  (cámara más lejos); desde ahí también se puede tocar una pieza.
   - Cajonera: 2 columnas, filas según los sobres (3 para 6, 4 para 7–8). Hover: el
-    cajón asoma; elegido: sale un tramo; extraído: sale completo y viene al frente,
-    inclinado para ver su interior. Al mover dinero, los cajones se abren y las fichas
-    caen dentro.
+    cajón asoma; al tocarlo sale completo y viene al frente, inclinado para ver su
+    interior. Al mover dinero, los cajones se entreabren (`ajar`) y las fichas caen dentro.
   - Archivador: carpetas en fila sobre placa champán y bandeja de acrílico. Hover:
-    sube un poco; elegida: sube sin salir del compartimento; extraída: sube hasta
-    librar las paredes, sale al frente y viene al centro girando hacia la cámara.
+    sube un poco; al tocarla sube hasta librar las paredes, sale al frente y viene al
+    centro girando hacia la cámara.
 - **Documentos en 3D** (abanico de tickets) son de la carpeta. En los otros estilos
   "Abrir sobre" muestra el panel de documentos igual, sin abanico.
 - **Cambiar de estilo** (selector en la barra o sobre la escena en móvil): el lienzo se
   desvanece (220 ms; nada con reduced motion), la escena anterior se libera (timelines,
   geometrías, materiales, texturas y contexto WebGL con `forceContextLoss`) y la nueva
-  se monta en el mismo estado visual (`syncScene`): mismo sobre elegido, extraído o no.
+  se monta en el mismo estado visual (`syncScene`): mismo sobre elegido, abierto o no.
   Siempre hay un solo canvas y un solo bucle. Si se cambia a media animación, la
   promesa de la escena anterior se resuelve al liberarla y no queda nada bloqueado. No
   toca el libro: cambiar de estilo no crea movimientos ni cambia saldos.
@@ -112,8 +114,8 @@ reiniciar son `focus`, `extract`, `returnEnvelope` y `clearFocus`.
 
 ## Abrir el sobre y buscar documentos
 
-Sobre extraído → "Abrir sobre" (o tocarlo): el labio se inclina y los movimientos
-asoman como tickets en abanico (máx. 8; el más reciente al frente). La búsqueda
+Tocar un sobre (o "Abrir sobre" en la tarjeta): sale de la carpeta, el labio se
+inclina y los movimientos asoman como tickets en abanico (máx. 8; el más reciente al frente). La búsqueda
 (Todo · Día · Semana · Mes · Fecha + texto) reacomoda el abanico y la frase que la
 describe (`describeFilter`) se escribe en Caveat en la tarjeta y en una etiqueta de
 papel sobre el sobre. Tocar un ticket (o la lista) lo saca al frente; Escape retrocede
@@ -139,22 +141,22 @@ del sobre en pantalla, dentro de la zona libre — `outsideNdc` —, para que la
 o la tarjeta no lo tapen). Solo con la carpeta abierta
 y sin un sobre fuera; depósito/retiro no se anima (no cambia sobres). Al cancelar
 un movimiento las fichas hacen el camino inverso (`reversalFlowOf`); si se canceló
-desde los documentos de un sobre abierto, el sobre se cierra y se reabre sin animar.
+desde los documentos de un sobre abierto, el sobre regresa, las fichas se animan y
+se vuelve a abrir con los documentos al día.
 
 ## Gestos (táctil y mouse)
 
 | Estado | ← → | ↑ | ↓ |
 |---|---|---|---|
 | Cerrada | ← abre (la tapa sigue al dedo) | — | — |
-| Abierta / enfocado | sobre siguiente/anterior | sobre el enfocado: lo saca; sobre otro: lo enfoca | — |
-| Sobre fuera | — | lo abre | lo regresa |
-| Sobre abierto | documento siguiente/anterior | sobre un ticket: lo saca | cierra el sobre |
+| Abierta | sobre siguiente/anterior (en la tarjeta) | sobre un sobre: lo saca abierto | — |
+| Sobre abierto | documento siguiente/anterior | sobre un ticket: lo saca | regresa el sobre |
 | Documento fuera | documento siguiente/anterior | — | lo regresa |
 
-Mientras se arrastra, la tapa o el sobre siguen al dedo; si el gesto no alcanza
+Mientras se arrastra, la tapa (o la pieza presentada en cajonera y archivador) sigue al dedo; si el gesto no alcanza
 (distancia o velocidad), vuelven a su lugar. En "cerrada" y "abierta" el lienzo usa
 `touch-action: pan-y` (deslizar en vertical desplaza la página); con un sobre
-elegido usa `none` y recibe todos los gestos. En pantallas táctiles una pista arriba
+abierto usa `none` y recibe todos los gestos. En pantallas táctiles una pista arriba
 del lienzo dice qué gesto aplica. Vibración corta (Android) al reconocer un gesto.
 
 ## Fondo fotográfico

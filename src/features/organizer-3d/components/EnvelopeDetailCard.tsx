@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, ArrowLeftRight, FolderOpen, Gauge, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, FolderOpen, Gauge, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -39,10 +39,8 @@ interface EnvelopeDetailCardProps {
   onArchive: () => void;
   stage: Stage;
   busy: boolean;
-  onExtract: () => void;
-  /** Con el sobre extraído, el botón principal lo abre para ver sus documentos. */
+  /** Saca el sobre ya abierto para ver sus documentos. */
   onOpenEnvelope: () => void;
-  onShow: () => void;
   onStep: (direction: -1 | 1) => void;
   onBack: () => void;
   className?: string;
@@ -51,11 +49,10 @@ interface EnvelopeDetailCardProps {
 export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
 /** Tarjeta de vidrio con el detalle del sobre seleccionado. */
-export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onOpenEnvelope, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const index = envelopes.findIndex((envelope) => envelope.id === item.id);
-  const extracted = stage === "extracted";
   const overdrawn = item.amount < 0;
 
   return (
@@ -87,11 +84,8 @@ export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, 
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={busy || extracted} onSelect={onShow}>
-                  Mostrar en la carpeta
-                </DropdownMenuItem>
                 <DropdownMenuItem disabled={busy || stage === "closed"} onSelect={onBack}>
-                  {extracted ? "Regresar a la carpeta" : "Atrás"}
+                  Atrás
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={busy} onSelect={onArchive}>
                   Archivar sobre
@@ -133,10 +127,10 @@ export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, 
       <Button
         className="mt-5 h-14 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/30 [&_svg:not([class*='size-'])]:size-5"
         disabled={busy}
-        onClick={extracted ? onOpenEnvelope : onExtract}
+        onClick={onOpenEnvelope}
       >
-        {extracted ? <FolderOpen /> : <Upload />}
-        {extracted ? "Abrir sobre" : "Extraer sobre"}
+        <FolderOpen />
+        Abrir sobre
       </Button>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70 px-2" disabled={busy} onClick={onRecord}>
@@ -170,7 +164,7 @@ export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, 
         <Button
           variant="ghost"
           size="icon"
-          aria-label={extracted ? "Regresar sobre" : "Atrás"}
+          aria-label="Atrás"
           disabled={busy || stage === "closed"}
           onClick={onBack}
           className="rounded-full bg-card/80 shadow-sm"

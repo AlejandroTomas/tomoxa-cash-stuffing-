@@ -21,19 +21,13 @@ describe("swipeCommand", () => {
   });
   it("abierta: horizontal cambia de sobre (izquierda = siguiente)", () => {
     expect(swipeCommand(view("open"), "left")).toEqual({ kind: "stepEnvelope", direction: 1 });
-    expect(swipeCommand(view("focused", "card"), "right")).toEqual({ kind: "stepEnvelope", direction: -1 });
+    expect(swipeCommand(view("open"), "right")).toEqual({ kind: "stepEnvelope", direction: -1 });
   });
-  it("arriba sobre un sobre: lo enfoca; si ya estaba enfocado, lo saca", () => {
-    expect(swipeCommand(view("open"), "up", { envelope: "cash" })).toEqual({ kind: "action", action: { type: "FOCUS", id: "cash" } });
-    expect(swipeCommand(view("focused", "card"), "up", { envelope: "card" })).toEqual({ kind: "action", action: { type: "EXTRACT" } });
-    expect(swipeCommand(view("focused", "card"), "up")).toBeNull();
+  it("arriba sobre un sobre: lo saca ya abierto", () => {
+    expect(swipeCommand(view("open"), "up", { envelope: "cash" })).toEqual({ kind: "action", action: { type: "OPEN_ENVELOPE", id: "cash" } });
+    expect(swipeCommand(view("open"), "up")).toBeNull();
   });
-  it("sobre fuera: arriba lo abre, abajo lo regresa", () => {
-    expect(swipeCommand(view("extracted", "card"), "up")).toEqual({ kind: "action", action: { type: "OPEN_ENVELOPE" } });
-    expect(swipeCommand(view("extracted", "card"), "down")).toEqual({ kind: "action", action: { type: "RETURN" } });
-    expect(swipeCommand(view("extracted", "card"), "left")).toBeNull();
-  });
-  it("sobre abierto: horizontal recorre documentos, abajo cierra, arriba saca el tocado", () => {
+  it("sobre abierto: horizontal recorre documentos, abajo lo regresa, arriba saca el tocado", () => {
     expect(swipeCommand(view("browsing", "card"), "left")).toEqual({ kind: "stepDocument", direction: 1 });
     expect(swipeCommand(view("browsing", "card"), "down")).toEqual({ kind: "action", action: { type: "CLOSE_ENVELOPE" } });
     expect(swipeCommand(view("browsing", "card"), "up", { document: "card-02" })).toEqual({ kind: "action", action: { type: "PICK_DOCUMENT", id: "card-02" } });

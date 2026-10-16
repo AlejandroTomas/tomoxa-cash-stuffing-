@@ -1,14 +1,16 @@
 import type { EnvelopeId } from "./envelopeView";
 
 /**
- * closed → open → focused ⇄ extracted ⇄ browsing ⇄ reading
- * - browsing: el sobre extraído está abierto y se ven sus documentos.
+ * closed → open ⇄ browsing ⇄ reading
+ * - browsing: el sobre salió de la carpeta ya abierto y se ven sus documentos
+ *   (tocar un sobre lo saca y lo abre en una sola animación).
  * - reading: un documento está fuera del sobre.
  */
-export type Stage = "closed" | "open" | "focused" | "extracted" | "browsing" | "reading";
+export type Stage = "closed" | "open" | "browsing" | "reading";
 
 export interface OrganizerView {
   stage: Stage;
+  /** Sobre fuera de la carpeta (en `browsing` y `reading`). */
   activeId: EnvelopeId | null;
   /** Documento fuera del sobre (solo en `reading`). */
   documentId: string | null;
@@ -19,17 +21,13 @@ export const initialView: OrganizerView = { stage: "closed", activeId: null, doc
 export type OrganizerAction =
   | { type: "OPEN" }
   | { type: "CLOSE" }
-  | { type: "FOCUS"; id: EnvelopeId }
-  | { type: "EXTRACT" }
-  | { type: "RETURN" }
-  | { type: "CLEAR_FOCUS" }
-  | { type: "OPEN_ENVELOPE" }
+  | { type: "OPEN_ENVELOPE"; id: EnvelopeId }
   | { type: "CLOSE_ENVELOPE" }
   | { type: "PICK_DOCUMENT"; id: string }
   | { type: "RETURN_DOCUMENT" };
 
-/** El sobre está fuera de la carpeta (extraído, abierto o con un documento fuera). */
-export const isEnvelopeOut = (stage: Stage) => stage === "extracted" || stage === "browsing" || stage === "reading";
+/** El sobre está fuera de la carpeta (abierto o con un documento fuera). */
+export const isEnvelopeOut = (stage: Stage) => stage === "browsing" || stage === "reading";
 
 /**
  * Máquina de estados visual: decide qué animación es válida desde cada estado.
@@ -41,19 +39,10 @@ export function transitionView(view: OrganizerView, action: OrganizerAction): Or
       return view.stage === "closed" ? { ...initialView, stage: "open" } : view;
     case "CLOSE":
       return view.stage === "closed" ? view : initialView;
-    case "FOCUS":
-      if (view.stage === "closed" || isEnvelopeOut(view.stage)) return view;
-      return view.activeId === action.id ? view : { stage: "focused", activeId: action.id, documentId: null };
-    case "EXTRACT":
-      return view.stage === "focused" && view.activeId ? { ...view, stage: "extracted" } : view;
-    case "RETURN":
-      return view.stage === "extracted" ? { ...view, stage: "focused" } : view;
-    case "CLEAR_FOCUS":
-      return view.stage === "focused" ? { ...initialView, stage: "open" } : view;
     case "OPEN_ENVELOPE":
-      return view.stage === "extracted" ? { ...view, stage: "browsing" } : view;
+      return view.stage === "open" ? { stage: "browsing", activeId: action.id, documentId: null } : view;
     case "CLOSE_ENVELOPE":
-      return view.stage === "browsing" ? { ...view, stage: "extracted" } : view;
+      return view.stage === "browsing" ? { ...initialView, stage: "open" } : view;
     case "PICK_DOCUMENT":
       if (view.stage !== "browsing" && view.stage !== "reading") return view;
       return view.documentId === action.id ? view : { ...view, stage: "reading", documentId: action.id };
@@ -69,10 +58,6 @@ export function backAction(stage: Stage): OrganizerAction | null {
       return { type: "RETURN_DOCUMENT" };
     case "browsing":
       return { type: "CLOSE_ENVELOPE" };
-    case "extracted":
-      return { type: "RETURN" };
-    case "focused":
-      return { type: "CLEAR_FOCUS" };
     case "open":
       return { type: "CLOSE" };
     case "closed":
@@ -83,8 +68,6 @@ export function backAction(stage: Stage): OrganizerAction | null {
 export const STAGE_LABELS: Record<Stage, string> = {
   closed: "Cerrada",
   open: "Explorando",
-  focused: "Sobre enfocado",
-  extracted: "Sobre extraído",
   browsing: "Sobre abierto",
   reading: "Documento fuera",
 };

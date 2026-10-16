@@ -52,17 +52,9 @@ export function swipeCommand(view: OrganizerView, direction: SwipeDirection, tar
       // La tapa abre hacia la izquierda: se "arrastra" con el dedo.
       return direction === "left" ? { kind: "action", action: { type: "OPEN" } } : null;
     case "open":
-    case "focused":
       if (horizontal) return { kind: "stepEnvelope", direction: next(direction) };
-      if (direction === "up" && target.envelope) {
-        return target.envelope === view.activeId
-          ? { kind: "action", action: { type: "EXTRACT" } }
-          : { kind: "action", action: { type: "FOCUS", id: target.envelope as NonNullable<OrganizerView["activeId"]> } };
-      }
-      return null;
-    case "extracted":
-      if (direction === "up") return { kind: "action", action: { type: "OPEN_ENVELOPE" } };
-      if (direction === "down") return { kind: "action", action: { type: "RETURN" } };
+      // Arriba sobre un sobre: lo saca ya abierto.
+      if (direction === "up" && target.envelope) return { kind: "action", action: { type: "OPEN_ENVELOPE", id: target.envelope } };
       return null;
     case "browsing":
       if (horizontal) return { kind: "stepDocument", direction: next(direction) };
@@ -82,13 +74,9 @@ export function swipeHint(stage: OrganizerView["stage"]): string {
     case "closed":
       return "Desliza a la izquierda para abrir";
     case "open":
-      return "Desliza para cambiar de sobre";
-    case "focused":
-      return "Desliza hacia arriba para sacarlo";
-    case "extracted":
-      return "Arriba lo abres · abajo lo regresas";
+      return "Toca un sobre para abrirlo";
     case "browsing":
-      return "Desliza entre documentos · abajo cierra";
+      return "Desliza entre documentos · abajo lo regresas";
     case "reading":
       return "Desliza entre documentos · abajo lo guarda";
   }
