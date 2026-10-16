@@ -1,7 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeftRight, FolderOpen, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, FolderOpen, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -14,8 +15,8 @@ import { ENVELOPE_ICONS } from "./envelopeIcons";
 const amountFormat = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dateFormat = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" });
 
-/** "$ 1,800.00" (con espacio, como en el diseño). */
-export const formatAmount = (amount: number) => `$ ${amountFormat.format(amount)}`;
+/** "$ 1,800.00" (con espacio, como en el diseño); negativos "−$ 100.00". */
+export const formatAmount = (amount: number) => `${amount < 0 ? "−" : ""}$ ${amountFormat.format(Math.abs(amount))}`;
 
 /** Fecha ISO local (YYYY-MM-DD) → "6 oct 2026". */
 export function formatShortDate(iso: string): string {
@@ -28,6 +29,7 @@ interface EnvelopeDetailCardProps {
   envelopes: readonly EnvelopeItem[];
   activity: EnvelopeActivity;
   onMoveMoney: () => void;
+  onRecord: () => void;
   onEdit: () => void;
   onArchive: () => void;
   stage: Stage;
@@ -43,12 +45,13 @@ interface EnvelopeDetailCardProps {
 
 export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
-/** Tarjeta de vidrio con el detalle del sobre seleccionado. Importes de demostración. */
-export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onEdit, onArchive, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+/** Tarjeta de vidrio con el detalle del sobre seleccionado. */
+export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const index = envelopes.findIndex((envelope) => envelope.id === item.id);
   const extracted = stage === "extracted";
+  const overdrawn = item.amount < 0;
 
   return (
     <section aria-label={`Detalle de ${item.name}`} className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, className)}>
@@ -92,13 +95,20 @@ export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onE
             </DropdownMenu>
           </div>
 
-          <p className="mt-5 text-4xl font-semibold tracking-tight text-foreground lg:text-[2.6rem]">{formatAmount(item.amount)}</p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className={cn("text-4xl font-semibold tracking-tight tabular-nums lg:text-[2.6rem]", overdrawn ? "text-destructive" : "text-foreground")}>{formatAmount(item.amount)}</p>
+            {overdrawn && (
+              <Badge variant="destructive">
+                <AlertTriangle aria-hidden="true" /> Sobregirado
+              </Badge>
+            )}
+          </div>
 
           <dl className="mt-4 divide-y divide-border/70 rounded-2xl border border-card/70 bg-card/70 px-4 text-sm">
             <div className="flex items-center gap-3 py-3">
               <CircleDollarSign className="size-4.5 text-muted-foreground" aria-hidden="true" />
               <dt className="flex-1 text-foreground/80">Total en sobre</dt>
-              <dd className="font-medium text-foreground tabular-nums">{formatAmount(item.amount)}</dd>
+              <dd className={cn("font-medium tabular-nums", overdrawn ? "text-destructive" : "text-foreground")}>{formatAmount(item.amount)}</dd>
             </div>
             <div className="flex items-center gap-3 py-3">
               <Plus className="size-4.5 rounded-sm border border-muted-foreground/60 p-px text-muted-foreground" aria-hidden="true" />
@@ -122,11 +132,14 @@ export function EnvelopeDetailCard({ item, envelopes, activity, onMoveMoney, onE
         {extracted ? <FolderOpen /> : <Upload />}
         {extracted ? "Abrir sobre" : "Extraer sobre"}
       </Button>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" disabled={busy} onClick={onMoveMoney}>
-          <ArrowLeftRight /> Mover dinero
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70 px-2" disabled={busy} onClick={onRecord}>
+          <ReceiptText /> Registrar
         </Button>
-        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" disabled={busy} onClick={onEdit}>
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70 px-2" disabled={busy} onClick={onMoveMoney}>
+          <ArrowLeftRight /> Mover
+        </Button>
+        <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70 px-2" disabled={busy} onClick={onEdit}>
           <Pencil /> Editar
         </Button>
       </div>

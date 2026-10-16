@@ -6,7 +6,11 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { toast } from "@/core/toast";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
+import { AccountsSheet } from "@/features/ledger/components/AccountsSheet";
+import { RecordMovementDialog, type RecordDefaults } from "@/features/ledger/components/RecordMovementDialog";
 import { MAX_ACTIVE_ENVELOPES } from "@/features/ledger/domain/envelopes";
+import { selectLedgerHealth } from "@/features/ledger/selector";
+import { useAppSelector } from "@/hooks/useReduxHooks";
 import type { MovementDraft } from "@/features/ledger/domain/validation";
 import { showDialog } from "@/utils/dialogService";
 import type { EnvelopeItem } from "../domain/envelopeView";
@@ -69,7 +73,23 @@ export function OrganizerExperience() {
   const tilesRef = useRef<HTMLDivElement>(null);
   // `undefined` mientras el libro carga del dispositivo.
   const item: EnvelopeItem | undefined = envelopes.find((envelope) => envelope.id === selectedId) ?? envelopes[0];
-  const [dialog, setDialog] = useState<"move" | "edit" | "create" | null>(null);
+  const [dialog, setDialog] = useState<"move" | "edit" | "create" | "record" | "accounts" | null>(null);
+  const [recordDefaults, setRecordDefaults] = useState<RecordDefaults>({});
+  // Al cubrir un sobre sobregirado: origen, destino y monto propuestos.
+  const [cover, setCover] = useState<{ from: string; to: string; amountMinor: number } | null>(null);
+  const health = useAppSelector(selectLedgerHealth);
+  const alert =
+    health.unbackedDebt > 0 && health.overdrawn > 0 ? "2 avisos" : health.unbackedDebt > 0 ? "Deuda sin respaldo" : health.overdrawn > 0 ? "Sobregirado" : null;
+  const openRecord = (defaults: RecordDefaults) => {
+    setRecordDefaults(defaults);
+    setDialog("record");
+  };
+  const openCover = (to: string, amountMinor: number) => {
+    const richest = [...envelopes].filter((envelope) => envelope.id !== to).sort((a, b) => b.amount - a.amount)[0];
+    if (!richest) return;
+    setCover({ from: richest.id, to, amountMinor });
+    setDialog("move");
+  };
   const itemId = item?.id ?? "";
   const onPreview = useCallback((style: EnvelopeStyle | null) => previewStyle(itemId, style), [previewStyle, itemId]);
   const otherNames = useMemo(
@@ -127,7 +147,7 @@ export function OrganizerExperience() {
     <main className={`${handwriting.variable} relative isolate min-h-dvh overflow-x-clip lg:h-dvh lg:min-h-[720px] lg:overflow-hidden`}>
       <OrganizerBackdrop />
       <div ref={navRef} className="relative z-20 lg:absolute lg:inset-x-[3%] lg:top-[2.4%]">
-        <OrganizerNav />
+        <OrganizerNav onAccounts={() => setDialog("accounts")} alert={alert} />
       </div>
 
       <section
@@ -216,7 +236,11 @@ export function OrganizerExperience() {
                   item={item}
                   envelopes={envelopes}
                   activity={activityFor(item.id)}
-                  onMoveMoney={() => setDialog("move")}
+                  onMoveMoney={() => {
+                    setCover(null);
+                    setDialog("move");
+                  }}
+                  onRecord={() => openRecord({ envelopeId: item.id })}
                   onEdit={() => setDialog("edit")}
                   onArchive={() => onArchive(item)}
                   stage={view.stage}
@@ -238,11 +262,20 @@ export function OrganizerExperience() {
           open={dialog === "move"}
           onOpenChange={(open) => setDialog(open ? "move" : null)}
           envelopes={envelopes}
-          defaultFrom={item.id}
+          defaultFrom={cover?.from ?? item.id}
+          defaultTo={cover?.to}
+          defaultAmountMinor={cover?.amountMinor}
           checkDraft={checkDraft}
           onConfirm={(draft) => void onTransfer(draft)}
         />
       )}
+      <RecordMovementDialog open={dialog === "record"} onOpenChange={(open) => setDialog(open ? "record" : null)} defaults={recordDefaults} />
+      <AccountsSheet
+        open={dialog === "accounts"}
+        onOpenChange={(open) => setDialog(open ? "accounts" : null)}
+        onPayCard={() => openRecord({ kind: "cardPayment" })}
+        onCover={openCover}
+      />
       <EditEnvelopeDialog
         open={dialog === "edit" || dialog === "create"}
         onOpenChange={(open) => setDialog(open ? dialog : null)}

@@ -1,5 +1,5 @@
 import { createAsyncThunkWithErrorHandling } from "@/store/utils/createAsyncThunkWithErrorHandling";
-import type { Envelope, LedgerSettings, Movement } from "../domain/types";
+import type { Account, CardSettings, Envelope, LedgerSettings, Movement } from "../domain/types";
 import type { MovementDraft } from "../domain/validation";
 import type { LedgerData } from "../repositories/ledger.repository";
 import { ledgerService } from "../services/ledger.service";
@@ -20,6 +20,11 @@ export const saveEnvelope = createAsyncThunkWithErrorHandling<Envelope, Envelope
 
 export const archiveEnvelope = createAsyncThunkWithErrorHandling<Envelope, string>("ledger/archiveEnvelope", (envelopeId) =>
   ledgerService.archiveEnvelope(envelopeId),
+);
+
+export const saveCardSettings = createAsyncThunkWithErrorHandling<Account, { accountId: string; card: Pick<CardSettings, "cutoffDay" | "paymentDays"> }>(
+  "ledger/saveCardSettings",
+  ({ accountId, card }) => ledgerService.saveCardSettings(accountId, card),
 );
 
 export const saveLedgerSettings = createAsyncThunkWithErrorHandling<LedgerSettings, LedgerSettings>("ledger/saveSettings", (settings) =>

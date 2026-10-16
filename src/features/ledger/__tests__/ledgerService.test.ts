@@ -82,4 +82,14 @@ describe("ledgerService", () => {
     const after = computeBalances(reloaded);
     expect(after.envelopes.savings - before.envelopes.savings).toBe(10000);
   });
+
+  it("guarda ajustes de tarjeta e ingresos validados", async () => {
+    const { service } = setup();
+    const { settings } = await service.load();
+    expect(await service.saveCardSettings("visa", { cutoffDay: 31, paymentDays: 18 })).toMatchObject({ card: { cutoffDay: 31, paymentDays: 18, reserveEnvelopeId: "card" } });
+    await expect(service.saveCardSettings("visa", { cutoffDay: 40, paymentDays: 18 })).rejects.toMatchObject({ fieldErrors: { cutoffDay: expect.any(String) } });
+    await expect(service.saveSettings({ ...settings!, recurringIncome: [{ id: "x", label: "Bono", weekday: 3, accountId: "visa" }] })).rejects.toBeInstanceOf(LedgerRuleError);
+    expect((await service.saveSettings({ ...settings!, recurringIncome: [{ id: "x", label: " Bono ", weekday: 3, accountId: "debit" }] })).recurringIncome[0].label).toBe("Bono");
+    expect((await service.load()).accounts.find((a) => a.id === "visa")?.card?.cutoffDay).toBe(31);
+  });
 });

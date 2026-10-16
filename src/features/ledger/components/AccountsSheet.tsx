@@ -1,0 +1,378 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { AlertTriangle, Banknote, CreditCard, Landmark, Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/core/toast";
+import { useAppDispatch, useAppSelector } from "@/hooks/useReduxHooks";
+import { cn } from "@/lib/utils";
+import { toLocalIsoDate } from "@/utils/localDate";
+import type { CardSummary } from "../domain/cards";
+import { formatMinor } from "../domain/money";
+import type { Account } from "../domain/types";
+import { saveCardSettings, saveLedgerSettings } from "../ledgerSlice";
+import { selectAccounts, selectActiveEnvelopes, selectBalances, selectCardSummaries, selectLedgerHealth, selectLedgerSettings } from "../selector";
+import { formatDay, WEEKDAYS } from "./format";
+
+interface AccountsSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Abre el registro con "Pagar tarjeta". */
+  onPayCard: () => void;
+  /** Cubrir un sobre sobregirado (mover `amountMinor` hacia él). */
+  onCover: (envelopeId: string, amountMinor: number) => void;
+}
+
+const row = "flex items-center gap-3 py-2.5";
+const panel = "divide-y divide-border/70 rounded-2xl border border-border/70 bg-card/70 px-4 text-sm";
+
+/** Cuentas (dónde está el dinero), deuda de la tarjeta, avisos y ajustes. */
+export function AccountsSheet({ open, onOpenChange, onPayCard, onCover }: AccountsSheetProps) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Landmark className="size-5" aria-hidden="true" /> Cuentas
+          </SheetTitle>
+          <SheetDescription>Dónde está tu dinero y cuánto debes.</SheetDescription>
+        </SheetHeader>
+        {open && (
+          <Tabs defaultValue="summary" className="px-4 pb-6">
+            <TabsList className="w-full">
+              <TabsTrigger value="summary">Resumen</TabsTrigger>
+              <TabsTrigger value="settings">Ajustes</TabsTrigger>
+            </TabsList>
+            <TabsContent value="summary" className="mt-2">
+              <Summary onPayCard={onPayCard} onCover={onCover} />
+            </TabsContent>
+            <TabsContent value="settings" className="mt-2 flex flex-col gap-6">
+              <CardSettingsSection />
+              <IncomeSettings />
+            </TabsContent>
+          </Tabs>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function useToday() {
+  const [today] = useState(() => toLocalIsoDate(new Date()));
+  return today;
+}
+
+function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | "onCover">) {
+  const accounts = useAppSelector(selectAccounts);
+  const balances = useAppSelector(selectBalances);
+  const health = useAppSelector(selectLedgerHealth);
+  const envelopes = useAppSelector(selectActiveEnvelopes);
+  const today = useToday();
+  const cards = useAppSelector((state) => selectCardSummaries(state, today));
+  const money = accounts.filter((account) => !account.archived && account.kind !== "credit").sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "debit" ? -1 : 1));
+  const overdrawn = envelopes.filter((envelope) => (balances.envelopes[envelope.id] ?? 0) < 0);
+
+  return (
+    <div className="flex flex-col gap-5">
+      {(health.unbackedDebt > 0 || overdrawn.length > 0) && (
+        <div role="status" className="flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-foreground">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+          <p>
+            {health.unbackedDebt > 0 && <>Tienes {formatMinor(health.unbackedDebt)} de deuda sin dinero apartado. </>}
+            {overdrawn.length > 0 && <>{overdrawn.length === 1 ? "Un sobre está sobregirado" : `${overdrawn.length} sobres están sobregirados`}: cúbrelos con dinero de otro sobre.</>}
+          </p>
+        </div>
+      )}
+
+      <section aria-labelledby="accounts-money" className="space-y-2">
+        <h3 id="accounts-money" className="text-sm font-medium text-muted-foreground">
+          Dinero
+        </h3>
+        <dl className={panel}>
+          {money.map((account) => (
+            <div key={account.id} className={row}>
+              {account.kind === "cash" ? <Banknote className="size-4.5 text-muted-foreground" aria-hidden="true" /> : <Landmark className="size-4.5 text-muted-foreground" aria-hidden="true" />}
+              <dt className="flex-1 text-foreground/80">{account.name}</dt>
+              <dd className="font-medium text-foreground tabular-nums">{formatMinor(balances.accounts[account.id] ?? 0)}</dd>
+            </div>
+          ))}
+          <div className={row}>
+            <dt className="flex-1 font-medium text-foreground">Total</dt>
+            <dd className="font-semibold text-foreground tabular-nums">{formatMinor(health.cash)}</dd>
+          </div>
+        </dl>
+      </section>
+
+      {cards.map((card) => (
+        <CardPanel key={card.account.id} card={card} onPay={onPayCard} />
+      ))}
+
+      {overdrawn.length > 0 && (
+        <section aria-labelledby="accounts-overdrawn" className="space-y-2">
+          <h3 id="accounts-overdrawn" className="text-sm font-medium text-muted-foreground">
+            Sobres sobregirados
+          </h3>
+          <ul className={panel}>
+            {overdrawn.map((envelope) => {
+              const balance = balances.envelopes[envelope.id] ?? 0;
+              return (
+                <li key={envelope.id} className={row}>
+                  <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: envelope.color }} />
+                  <span className="flex-1 text-foreground/80">{envelope.name}</span>
+                  <span className="font-medium text-destructive tabular-nums">{formatMinor(balance)}</span>
+                  <Button size="sm" variant="outline" className="rounded-full" onClick={() => onCover(envelope.id, -balance)}>
+                    Cubrir
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function CardPanel({ card, onPay }: { card: CardSummary; onPay: () => void }) {
+  return (
+    <section aria-labelledby={`card-${card.account.id}`} className="space-y-2">
+      <h3 id={`card-${card.account.id}`} className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <CreditCard className="size-4" aria-hidden="true" /> {card.account.name}
+      </h3>
+      <dl className={panel}>
+        <div className={row}>
+          <dt className="flex-1 text-foreground/80">Deuda</dt>
+          <dd className="font-semibold text-foreground tabular-nums">{formatMinor(card.debt)}</dd>
+        </div>
+        <div className={row}>
+          <dt className="flex-1 text-foreground/80">Apartado para pagarla</dt>
+          <dd className={cn("font-medium tabular-nums", card.reserve < 0 ? "text-destructive" : "text-foreground")}>{formatMinor(card.reserve)}</dd>
+        </div>
+        <div className={row}>
+          <dt className="flex-1 text-foreground/80">Sin respaldo</dt>
+          <dd className="flex items-center gap-2 font-medium tabular-nums">
+            {card.unbacked > 0 ? (
+              <>
+                <Badge variant="destructive">Revisa</Badge>
+                <span className="text-destructive">{formatMinor(card.unbacked)}</span>
+              </>
+            ) : (
+              <span className="text-foreground">{formatMinor(0)}</span>
+            )}
+          </dd>
+        </div>
+        <div className={row}>
+          <dt className="flex-1 text-foreground/80">Corte · pago</dt>
+          <dd className="text-foreground tabular-nums">
+            {formatDay(card.period.cutoff)} · {formatDay(card.period.due)}
+          </dd>
+        </div>
+      </dl>
+      <Button className="w-full rounded-xl" disabled={!card.debt} onClick={onPay}>
+        <CreditCard /> Pagar tarjeta
+      </Button>
+    </section>
+  );
+}
+
+const dayField = (min: number, max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .regex(/^\d{1,2}$/, message)
+    .refine((value) => Number(value) >= min && Number(value) <= max, message);
+
+const cardFormSchema = z.object({
+  cutoffDay: dayField(1, 31, "Del 1 al 31."),
+  paymentDays: dayField(1, 60, "De 1 a 60."),
+});
+type CardForm = z.infer<typeof cardFormSchema>;
+
+function CardSettingsSection() {
+  const accounts = useAppSelector(selectAccounts);
+  const cards = accounts.filter((account): account is Account & { card: NonNullable<Account["card"]> } => account.kind === "credit" && !account.archived && Boolean(account.card));
+  return (
+    <>
+      {cards.map((account) => (
+        <CardSettingsForm key={account.id} account={account} />
+      ))}
+    </>
+  );
+}
+
+function CardSettingsForm({ account }: { account: Account & { card: NonNullable<Account["card"]> } }) {
+  const dispatch = useAppDispatch();
+  const [saving, setSaving] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isDirty },
+    reset,
+  } = useForm<CardForm>({
+    resolver: zodResolver(cardFormSchema),
+    defaultValues: { cutoffDay: String(account.card.cutoffDay), paymentDays: String(account.card.paymentDays) },
+  });
+
+  const onSubmit = async (form: CardForm) => {
+    setSaving(true);
+    try {
+      const saved = await dispatch(saveCardSettings({ accountId: account.id, card: { cutoffDay: Number(form.cutoffDay), paymentDays: Number(form.paymentDays) } })).unwrap();
+      reset({ cutoffDay: String(saved.card?.cutoffDay), paymentDays: String(saved.card?.paymentDays) });
+      toast.success(`Guardado: ${account.name}.`);
+    } catch {
+      // El middleware ya mostró el error.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
+      <h3 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <CreditCard className="size-4" aria-hidden="true" /> {account.name}
+      </h3>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`cutoff-${account.id}`}>Día de corte</Label>
+          <Input id={`cutoff-${account.id}`} inputMode="numeric" aria-invalid={Boolean(errors.cutoffDay)} className="rounded-xl tabular-nums" {...register("cutoffDay")} />
+          {errors.cutoffDay && <p className="text-xs text-destructive">{errors.cutoffDay.message}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`days-${account.id}`}>Días para pagar</Label>
+          <Input id={`days-${account.id}`} inputMode="numeric" aria-invalid={Boolean(errors.paymentDays)} className="rounded-xl tabular-nums" {...register("paymentDays")} />
+          {errors.paymentDays && <p className="text-xs text-destructive">{errors.paymentDays.message}</p>}
+        </div>
+      </div>
+      <Button type="submit" size="sm" variant="outline" className="rounded-full" disabled={!isDirty || saving}>
+        Guardar
+      </Button>
+    </form>
+  );
+}
+
+const incomeFormSchema = z.object({
+  incomes: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string().trim().min(1, "Ponle un nombre.").max(40, "Máximo 40 caracteres."),
+      weekday: z.string(),
+      accountId: z.string().min(1, "Elige una cuenta."),
+    }),
+  ),
+});
+type IncomeForm = z.infer<typeof incomeFormSchema>;
+
+function IncomeSettings() {
+  const dispatch = useAppDispatch();
+  const settings = useAppSelector(selectLedgerSettings);
+  const accounts = useAppSelector(selectAccounts);
+  const money = useMemo(() => accounts.filter((account) => !account.archived && account.kind !== "credit"), [accounts]);
+  const [saving, setSaving] = useState(false);
+  const toForm = (incomes: typeof settings.recurringIncome): IncomeForm => ({ incomes: incomes.map((income) => ({ ...income, weekday: String(income.weekday) })) });
+  const {
+    control,
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm<IncomeForm>({ resolver: zodResolver(incomeFormSchema), defaultValues: toForm(settings.recurringIncome) });
+  const { fields, append, remove } = useFieldArray({ control, name: "incomes" });
+
+  const onSubmit = async (form: IncomeForm) => {
+    setSaving(true);
+    try {
+      const saved = await dispatch(
+        saveLedgerSettings({ ...settings, recurringIncome: form.incomes.map((income) => ({ ...income, weekday: Number(income.weekday) })) }),
+      ).unwrap();
+      reset(toForm(saved.recurringIncome));
+      toast.success("Ingresos guardados.");
+    } catch {
+      // El middleware ya mostró el error.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground">Ingresos recurrentes</h3>
+        <p className="text-xs text-muted-foreground">Se proponen al registrar un ingreso ese día; no se registran solos.</p>
+      </div>
+      <ul className="space-y-3">
+        {fields.map((field, index) => {
+          const error = errors.incomes?.[index];
+          return (
+            <li key={field.id} className="space-y-2 rounded-2xl border border-border/70 bg-card/70 p-3">
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`income-${index}-label`} className="sr-only">
+                  Nombre
+                </Label>
+                <Input id={`income-${index}-label`} placeholder="Nómina" aria-invalid={Boolean(error?.label)} className="rounded-xl" {...register(`incomes.${index}.label`)} />
+                <Button type="button" variant="ghost" size="icon" aria-label={`Quitar ingreso ${index + 1}`} onClick={() => remove(index)} className="shrink-0 rounded-full">
+                  <Trash2 />
+                </Button>
+              </div>
+              {error?.label && <p className="text-xs text-destructive">{error.label.message}</p>}
+              <div className="grid grid-cols-2 gap-2">
+                <Controller
+                  control={control}
+                  name={`incomes.${index}.weekday`}
+                  render={({ field: select }) => (
+                    <Select value={select.value} onValueChange={select.onChange}>
+                      <SelectTrigger aria-label="Día" className="w-full rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WEEKDAYS.map((day, value) => (
+                          <SelectItem key={day} value={String(value)}>
+                            {day}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name={`incomes.${index}.accountId`}
+                  render={({ field: select }) => (
+                    <Select value={select.value} onValueChange={select.onChange}>
+                      <SelectTrigger aria-label="Cuenta" aria-invalid={Boolean(error?.accountId)} className="w-full rounded-xl">
+                        <SelectValue placeholder="Cuenta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {money.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" variant="ghost" className="rounded-full" onClick={() => append({ id: crypto.randomUUID(), label: "", weekday: "5", accountId: money[0]?.id ?? "" })}>
+          <Plus /> Agregar
+        </Button>
+        <Button type="submit" size="sm" variant="outline" className="ml-auto rounded-full" disabled={!isDirty || saving}>
+          Guardar
+        </Button>
+      </div>
+    </form>
+  );
+}

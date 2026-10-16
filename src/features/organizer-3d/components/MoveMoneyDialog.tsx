@@ -18,7 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import type { LedgerIssue, MovementDraft } from "@/features/ledger/domain/validation";
 import { toLocalIsoDate } from "@/utils/localDate";
-import { parseAmountMinor, transferFormSchema, type TransferForm } from "../domain/transfer";
+import { minorToInput, parseAmountMinor } from "@/features/ledger/domain/money";
+import { transferFormSchema, type TransferForm } from "../domain/transfer";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { formatAmount } from "./EnvelopeDetailCard";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
@@ -28,15 +29,16 @@ interface MoveMoneyDialogProps {
   onOpenChange: (open: boolean) => void;
   envelopes: readonly EnvelopeItem[];
   defaultFrom: EnvelopeId;
+  /** Destino y monto propuestos (p. ej. al cubrir un sobre sobregirado). */
+  defaultTo?: EnvelopeId;
+  defaultAmountMinor?: number;
   /** Reglas del libro (las mismas que aplica el servicio al guardar). */
   checkDraft: (draft: MovementDraft) => LedgerIssue | null;
   /** Se llama con el movimiento ya validado, después de cerrar el diálogo (para ver la animación). */
   onConfirm: (draft: MovementDraft) => void;
 }
 
-const minorToInput = (minor: number) => (minor / 100).toFixed(2).replace(/\.00$/, "");
-
-/** Mover dinero entre sobres. Demostración: valida contra los saldos de ejemplo y no se guarda. */
+/** Mover dinero entre sobres (asignación). Valida con las reglas del libro antes de animar. */
 export function MoveMoneyDialog({ open, onOpenChange, ...props }: MoveMoneyDialogProps) {
   return (
     <Credenza open={open} onOpenChange={onOpenChange}>
@@ -70,8 +72,8 @@ function EnvelopeSelect({ id, value, onChange, envelopes, invalid }: { id: strin
   );
 }
 
-function MoveMoneyForm({ envelopes, defaultFrom, checkDraft, onConfirm, onClose }: Omit<MoveMoneyDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
-  const firstOther = envelopes.find((item) => item.id !== defaultFrom)?.id ?? defaultFrom;
+function MoveMoneyForm({ envelopes, defaultFrom, defaultTo, defaultAmountMinor, checkDraft, onConfirm, onClose }: Omit<MoveMoneyDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
+  const firstOther = defaultTo ?? envelopes.find((item) => item.id !== defaultFrom)?.id ?? defaultFrom;
   const {
     control,
     register,
@@ -79,7 +81,7 @@ function MoveMoneyForm({ envelopes, defaultFrom, checkDraft, onConfirm, onClose 
     setValue,
     setError,
     formState: { errors },
-  } = useForm<TransferForm>({ resolver: zodResolver(transferFormSchema), defaultValues: { from: defaultFrom, to: firstOther, amount: "" } });
+  } = useForm<TransferForm>({ resolver: zodResolver(transferFormSchema), defaultValues: { from: defaultFrom, to: firstOther, amount: defaultAmountMinor ? minorToInput(defaultAmountMinor) : "" } });
   const from = useWatch({ control, name: "from" }) as EnvelopeId;
   const to = useWatch({ control, name: "to" });
   const available = Math.round((envelopes.find((item) => item.id === from)?.amount ?? 0) * 100);
@@ -120,7 +122,7 @@ function MoveMoneyForm({ envelopes, defaultFrom, checkDraft, onConfirm, onClose 
         <CredenzaTitle className="flex items-center gap-2">
           <ArrowLeftRight className="size-5" aria-hidden="true" /> Mover dinero
         </CredenzaTitle>
-        <CredenzaDescription>Demostración: los montos son de ejemplo y nada se guarda.</CredenzaDescription>
+        <CredenzaDescription>Reparte tu dinero entre sobres. Se guarda en este dispositivo.</CredenzaDescription>
       </CredenzaHeader>
 
       <div className="flex flex-col gap-2">

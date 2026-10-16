@@ -7,12 +7,17 @@ decisiones: `.ia/tasks/fase-2-libro-de-movimientos.md`.
 
 ```
 domain/        types · balances (saldos, deuda sin respaldo) · validation (reglas) ·
-               envelopes (crear/editar/archivar) · statement (cortes) · seed (datos de ejemplo)
+               envelopes (crear/editar/archivar) · statement (cortes) · seed (datos de ejemplo) ·
+               cards (resumen por tarjeta, ajustes, ingresos del día) · money (montos ↔ texto) ·
+               movementForm (formulario de registro → movimiento)
 errors/        LedgerRuleError (ValidationError con code y campo)
 repositories/  ledgerDatabase (Dexie, versionada) · ledger.repository (privado)
-services/      ledger.service: load (siembra la 1.ª vez), record, cancel, saveEnvelope, archiveEnvelope, saveSettings
+services/      ledger.service: load (siembra la 1.ª vez), record, cancel, saveEnvelope, archiveEnvelope,
+               saveSettings, saveCardSettings
 actions/       thunks "ledger/…" (privados; se importan desde ledgerSlice)
-ledgerSlice.ts · selector.ts   estado y saldos memorizados
+ledgerSlice.ts · selector.ts   estado y saldos memorizados (selectLedgerHealth, selectCardSummaries)
+components/    RecordMovementDialog (gasto, ingreso, pago de tarjeta, depósito/retiro) ·
+               AccountsSheet (cuentas, deuda, sobregirados, ajustes)
 ```
 
 ## Reglas que conviene recordar

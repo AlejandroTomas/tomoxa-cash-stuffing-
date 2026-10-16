@@ -1,5 +1,6 @@
 import { envelopeStyleSchema, toneFor } from "../domain/envelopeStyle";
-import { parseAmountMinor, transferFormSchema } from "../domain/transfer";
+import { parseAmountMinor } from "@/features/ledger/domain/money";
+import { transferFormSchema } from "../domain/transfer";
 
 
 describe("parseAmountMinor", () => {

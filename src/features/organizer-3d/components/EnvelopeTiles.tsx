@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
@@ -36,10 +36,11 @@ export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, onCreate,
             <button
               type="button"
               aria-pressed={selected}
+              aria-label={envelope.amount < 0 ? `${envelope.name} (sobregirado)` : undefined}
               disabled={busy}
               onClick={() => onSelect(envelope.id)}
               className={cn(
-                "flex aspect-[6/5] w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 px-2 text-sm font-medium shadow-md shadow-foreground/5 outline-none backdrop-blur-md transition-[transform,box-shadow,border-color]",
+                "relative flex aspect-[6/5] w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 px-2 text-sm font-medium shadow-md shadow-foreground/5 outline-none backdrop-blur-md transition-[transform,box-shadow,border-color]",
                 "hover:-translate-y-0.5 focus-visible:ring-[3px] focus-visible:ring-ring/60 disabled:cursor-wait lg:text-[0.95rem]",
                 selected ? "-translate-y-1 border-card shadow-xl" : "border-transparent",
               )}
@@ -50,6 +51,11 @@ export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, onCreate,
             >
               <Icon className="size-7 lg:size-8" strokeWidth={1.7} style={{ color: `color-mix(in oklch, ${envelope.color} 75%, var(--foreground))` }} aria-hidden="true" />
               <span className="truncate">{envelope.name}</span>
+              {envelope.amount < 0 && (
+                <span aria-hidden="true" className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-card text-destructive shadow-sm">
+                  <AlertTriangle className="size-3" />
+                </span>
+              )}
             </button>
           </li>
         );

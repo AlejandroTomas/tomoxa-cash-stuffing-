@@ -1,6 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-import { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope, saveLedgerSettings } from "./actions/ledger.actions";
+import { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveCardSettings, saveEnvelope, saveLedgerSettings } from "./actions/ledger.actions";
 import { DEFAULT_SETTINGS } from "./domain/seed";
 import type { Account, Envelope, LedgerSettings, Movement } from "./domain/types";
 
@@ -48,6 +48,9 @@ const ledgerSlice = createSlice({
       })
       .addCase(saveLedgerSettings.fulfilled, (state, { payload }) => {
         state.settings = payload;
+      })
+      .addCase(saveCardSettings.fulfilled, (state, { payload }) => {
+        state.accounts = state.accounts.map((account) => (account.id === payload.id ? payload : account));
       });
   },
 });
@@ -55,4 +58,4 @@ const ledgerSlice = createSlice({
 export default ledgerSlice.reducer;
 
 // Los thunks se reexportan desde el slice: es la API pública del feature.
-export { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope, saveLedgerSettings };
+export { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveCardSettings, saveEnvelope, saveLedgerSettings };

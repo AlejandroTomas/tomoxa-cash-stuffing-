@@ -9,7 +9,7 @@ import { classifyGesture, TAP_SLOP, type SwipeDirection } from "../domain/gestur
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, FOCUS_LIFT, focusPose as focusPoseOf, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose as focusPoseOf, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 
@@ -75,7 +75,6 @@ const SLOW_FRAME_MS = 25;
 /** Cuánto se levanta la mitad móvil de cada anilla (rad). */
 const RINGS_OPEN = 0.36;
 /** Cuánto suben los sobres de atrás al enfocar uno: lo mismo que el enfocado, así su etiqueta queda igual de visible que en reposo. */
-const BEHIND_RISE = FOCUS_LIFT + 0.02;
 /** Cuánto se inclina el labio del sobre al abrirlo. */
 const MOUTH_OPEN = 0.85;
 /** Documento fuera del sobre: al frente y un poco más grande (coordenadas del sobre). */
@@ -213,9 +212,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     toPose(tl, part, { ...slot, y: slot.y - yieldBy }, at, duration, ease);
   }
 
-  /** Al enfocar `part`: los sobres de atrás suben y los de enfrente bajan un poco. */
+  /** Al enfocar `part`: solo él asoma; los de atrás se quedan en su lugar y los de enfrente bajan un poco. */
   function makeRoomFor(tl: gsap.core.Timeline, part: EnvelopePart, at: number) {
-    parts.forEach((other) => other !== part && toSlot(tl, other, at, d(0.5), true, other.index > part.index ? 0.06 : -BEHIND_RISE));
+    parts.forEach((other) => other !== part && toSlot(tl, other, at, d(0.5), true, other.index > part.index ? 0.06 : 0));
   }
 
   /** Arriba de su bolsillo, en su mismo plano. */
@@ -300,8 +299,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     activeId = id;
     restingLayers();
     await play((tl) => {
-      // Los sobres de enfrente ceden un poco; el elegido asoma de su bolsillo.
-      // Los de atrás suben (su etiqueta sigue visible) y los de enfrente ceden un poco.
+      // El elegido asoma de su bolsillo; los de enfrente ceden un poco.
       makeRoomFor(tl, part, 0);
       toPose(tl, part, focusPose(part.index), d(0.04), d(0.62), "back.out(1.5)");
     });

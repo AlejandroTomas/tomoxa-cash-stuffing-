@@ -1,7 +1,8 @@
 import { computeBalances } from "../domain/balances";
+import { checkCardSettings, checkSettings } from "../domain/cards";
 import { checkArchive, checkEnvelope } from "../domain/envelopes";
 import { DEFAULT_SETTINGS, SEED_ACCOUNTS, SEED_ENVELOPES, seedMovements } from "../domain/seed";
-import type { Envelope, LedgerSettings, Movement } from "../domain/types";
+import type { Account, CardSettings, Envelope, LedgerSettings, Movement } from "../domain/types";
 import { checkMovement, type MovementDraft } from "../domain/validation";
 import { LedgerRuleError } from "../errors/ledger-errors";
 import { ledgerRepository, type LedgerData, type LedgerRepository } from "../repositories/ledger.repository";
@@ -74,9 +75,26 @@ export function createLedgerService({ repository, now, newId }: ServiceDeps) {
       return archived;
     },
 
+    /** Ingresos recurrentes y preferencias (validados). */
     async saveSettings(settings: LedgerSettings): Promise<LedgerSettings> {
-      await repository.saveSettings(settings);
-      return settings;
+      const data = await repository.loadAll();
+      const clean = { ...settings, recurringIncome: settings.recurringIncome.map((income) => ({ ...income, label: income.label.trim() })) };
+      const issue = checkSettings(clean, data.accounts);
+      if (issue) throw new LedgerRuleError({ code: "INVALID_SETTINGS", ...issue });
+      await repository.saveSettings(clean);
+      return clean;
+    },
+
+    /** Día de corte y días para pagar de una tarjeta. */
+    async saveCardSettings(accountId: string, card: Pick<CardSettings, "cutoffDay" | "paymentDays">): Promise<Account> {
+      const data = await repository.loadAll();
+      const account = data.accounts.find((candidate) => candidate.id === accountId);
+      if (!account?.card) throw new LedgerRuleError({ code: "UNKNOWN_ACCOUNT", field: "form", message: "Esa tarjeta no existe." });
+      const issue = checkCardSettings(card);
+      if (issue) throw new LedgerRuleError({ code: "INVALID_SETTINGS", ...issue });
+      const saved: Account = { ...account, card: { ...account.card, cutoffDay: card.cutoffDay, paymentDays: card.paymentDays } };
+      await repository.putAccount(saved);
+      return saved;
     },
   };
 }

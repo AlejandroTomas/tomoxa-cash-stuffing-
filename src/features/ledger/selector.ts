@@ -2,6 +2,7 @@ import { createSelector } from "@reduxjs/toolkit";
 
 import type { RootState } from "@/store";
 import { computeBalances, overdrawn, totalCash, unbackedDebt } from "./domain/balances";
+import { cardSummaries } from "./domain/cards";
 
 /** Lectores del libro. Todo lo derivado (saldos) se calcula en `domain/`, memorizado. */
 export const selectLedgerLoaded = (state: RootState) => state.ledger.loaded;
@@ -25,3 +26,8 @@ export const selectLedgerHealth = createSelector([selectBalances, selectAccounts
   overdrawn: overdrawn(balances),
   unbackedDebt: unbackedDebt(balances, accounts),
 }));
+
+/** Tarjetas con deuda, reserva, deuda sin respaldo y periodo de corte. `today` = "YYYY-MM-DD". */
+export const selectCardSummaries = createSelector([selectAccounts, selectBalances, (_state: RootState, today: string) => today], (accounts, balances, today) =>
+  cardSummaries(accounts, balances, today),
+);

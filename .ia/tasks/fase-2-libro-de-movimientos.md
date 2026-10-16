@@ -91,6 +91,9 @@ no cambia de rol: recibe datos de solo lectura y nunca modifica montos.
    editar/crear/archivar sobres persistente; la carpeta 3D con N sobres.
 5. **Registrar movimientos**: formularios de ingreso, gasto (con cuenta), pago de tarjeta,
    depósito/retiro; vista de cuentas con deuda y alerta de deuda sin respaldo; ajustes.
+   ✅ Hecho: `RecordMovementDialog` (botón "Registrar" de la tarjeta del sobre) y
+   `AccountsSheet` (botón "Cuentas" de la nav, con aviso). Sobregirado en rojo con
+   indicador en la ficha; "Cubrir" abre Mover dinero con el monto que falta.
 6. **Respaldo y corrección**: exportar/importar JSON, cancelar un movimiento.
 
 ## Fuera de alcance

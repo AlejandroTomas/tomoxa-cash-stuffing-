@@ -88,7 +88,7 @@ export const pocketClearance = (count = COMFORT_COUNT) => ENVELOPE.height - stac
 export const POCKET_CLEARANCE = pocketClearance();
 
 /** Distancia que asoma un sobre enfocado, a lo largo de su propio plano. */
-export const FOCUS_LIFT = 0.42;
+export const FOCUS_LIFT = 0.26;
 
 /** Pose de "enfocado": asoma hacia arriba dentro de su plano, sin atravesar a los de enfrente. */
 export function focusPose(index: number, fanned = true, count = COMFORT_COUNT): SlotPose {
