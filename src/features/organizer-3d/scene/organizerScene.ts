@@ -9,7 +9,7 @@ import { classifyGesture, TAP_SLOP, type SwipeDirection } from "../domain/gestur
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, POCKET_CLEARANCE, slotPose, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, FOCUS_LIFT, focusPose, insidePose, POCKET_CLEARANCE, slotPose, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 
@@ -65,6 +65,10 @@ const LIFT = POCKET_CLEARANCE;
 const EXTRACTED = { rx: -BINDER.tilt.x * 0.88, ry: -BINDER.tilt.y * 0.7 - 0.06, rz: -BINDER.tilt.z * 0.8, scale: 1.06 };
 /** Z mínima del sobre presentado: por delante del sobre más cercano en abanico. */
 const MIN_PRESENT_Z = 1.6;
+/** Cuánto se abren las mitades de cada anilla (rad). */
+const RINGS_OPEN = 0.42;
+/** Cuánto suben los sobres de atrás al enfocar uno: lo mismo que el enfocado, así su etiqueta queda igual de visible que en reposo. */
+const BEHIND_RISE = FOCUS_LIFT + 0.02;
 /** Cuánto se inclina el labio del sobre al abrirlo. */
 const MOUTH_OPEN = 0.85;
 /** Documento fuera del sobre: al frente y un poco más grande (coordenadas del sobre). */
@@ -160,6 +164,13 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     parts.forEach((part) => part.setLayer(10 + part.index * 5));
   }
 
+  /** Abre o cierra las anillas (las mitades giran sobre su bisagra junto a la placa). */
+  function ringsTo(tl: gsap.core.Timeline, open: boolean, at: number, duration = d(0.28)) {
+    const angle = open ? RINGS_OPEN : 0;
+    tl.to(binder.ringHalves.right.map((half) => half.rotation), { z: -angle, duration, ease: open ? "back.out(1.6)" : "power2.in", stagger: d(0.02) }, at);
+    tl.to(binder.ringHalves.left.map((half) => half.rotation), { z: angle, duration, ease: open ? "back.out(1.6)" : "power2.in", stagger: d(0.02) }, at);
+  }
+
   function toPose(tl: gsap.core.Timeline, part: EnvelopePart, pose: SlotPose, at: number, duration: number, ease = "power3.out") {
     tl.to(part.group.position, { x: pose.x, y: pose.y, z: pose.z, duration, ease }, at);
     tl.to(part.group.rotation, { x: pose.rx, y: 0, z: 0, duration, ease }, at);
@@ -170,6 +181,11 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   function toSlot(tl: gsap.core.Timeline, part: EnvelopePart, at: number, duration: number, fanned: boolean, yieldBy = 0, ease?: string) {
     const slot = slotPose(part.index, fanned);
     toPose(tl, part, { ...slot, y: slot.y - yieldBy }, at, duration, ease);
+  }
+
+  /** Al enfocar `part`: los sobres de atrás suben y los de enfrente bajan un poco. */
+  function makeRoomFor(tl: gsap.core.Timeline, part: EnvelopePart, at: number) {
+    parts.forEach((other) => other !== part && toSlot(tl, other, at, d(0.5), true, other.index > part.index ? 0.06 : -BEHIND_RISE));
   }
 
   /** Arriba de su bolsillo, en su mismo plano. */
@@ -194,8 +210,10 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     tl.to(part.group.rotation, { x: above.rx, y: 0, z: 0, duration: back, ease: "power2.inOut" }, at + rise * 0.6);
     tl.to(part.group.scale, { x: 1, y: 1, z: 1, duration: back, ease: "power2.inOut" }, at + rise * 0.6);
     const settle = at + rise * 0.6 + back;
+    ringsTo(tl, true, at + rise * 0.6 + back * 0.4);
     tl.call(() => restingLayers(), [], settle);
     tl.to(part.group.position, { y: end.y, z: end.z, duration: down, ease: "power2.out" }, settle);
+    ringsTo(tl, false, settle + down * 0.6);
     return settle + down;
   }
 
@@ -251,7 +269,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     restingLayers();
     await play((tl) => {
       // Los sobres de enfrente ceden un poco; el elegido asoma de su bolsillo.
-      parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.5), true, other.index > part.index ? 0.06 : 0));
+      // Los de atrás suben (su etiqueta sigue visible) y los de enfrente ceden un poco.
+      makeRoomFor(tl, part, 0);
       toPose(tl, part, focusPose(part.index), d(0.04), d(0.62), "back.out(1.5)");
     });
   }
@@ -291,7 +310,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       parts.forEach((other) => other !== part && toSlot(tl, other, 0, d(0.45), true));
       // 1) Sale del bolsillo hacia arriba, en su plano, hasta librar a los de enfrente.
       // 2) Viene al frente a esa altura. 3) Ya delante de todos, baja a su lugar mirando a la cámara.
+      ringsTo(tl, true, 0);
       toPose(tl, part, abovePocket(part.index), 0, d(0.45), "power2.inOut");
+      ringsTo(tl, false, d(0.95));
       const spot = extractedSpot();
       tl.to(part.group.position, { x: spot.x, z: spot.z, duration: d(0.6), ease: "power2.out" }, d(0.42));
       tl.to(part.group.position, { y: spot.y, duration: d(0.6), ease: "power3.out" }, d(0.72));
@@ -306,7 +327,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     stage = "focused";
     activeId = id;
     await play((tl) => {
-      slideBack(tl, part, 0, focusPose(part.index));
+      const end = slideBack(tl, part, 0, focusPose(part.index));
+      makeRoomFor(tl, part, end - d(0.5));
     });
   }
 
@@ -604,7 +626,14 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     const width = canvasSize.width;
     const height = canvasSize.height;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
-    if (stage === "closed" && horizontal) binder.coverPivot.rotation.y = THREE.MathUtils.clamp(dx / width, -1, 0) * 0.6;
+    if (stage === "closed" && horizontal) {
+      const progress = THREE.MathUtils.clamp(-dx / width, 0, 1);
+      // La correa se desabrocha primero; la tapa empieza a levantarse después.
+      const strap = THREE.MathUtils.clamp(progress * 3, 0, 1);
+      binder.strapTab.rotation.y = strap * STRAP_TAB_OPEN;
+      binder.strapPivot.rotation.y = strap * STRAP_OPEN * 0.7;
+      binder.coverPivot.rotation.y = -Math.max(0, progress - 0.15) * 0.7;
+    }
     const active = activeId ? byId.get(activeId) : undefined;
     if (active && !horizontal && (stage === "focused" || stage === "extracted")) {
       active.hover.position.y = THREE.MathUtils.clamp(-dy / height, -0.3, 0.4) * 1.2;
@@ -619,7 +648,11 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     if (running) return;
     const active = activeId ? byId.get(activeId) : undefined;
     ctx.add(() => {
-      if (stage === "closed") gsap.to(binder.coverPivot.rotation, { y: 0, duration: d(0.35), ease: "back.out(1.6)" });
+      if (stage === "closed") {
+        gsap.to(binder.coverPivot.rotation, { y: 0, duration: d(0.35), ease: "back.out(1.6)" });
+        gsap.to(binder.strapPivot.rotation, { y: 0, duration: d(0.35), delay: d(0.1), ease: "power2.inOut" });
+        gsap.to(binder.strapTab.rotation, { y: 0, duration: d(0.3), delay: d(0.3), ease: "back.out(1.4)" });
+      }
       if (active) gsap.to(active.hover.position, { y: 0, duration: d(0.3), ease: "power2.out" });
     });
     shadowsDirtyUntil = performance.now() + 500;

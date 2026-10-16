@@ -14,6 +14,11 @@ export interface BinderParts {
   coverShadow: THREE.MeshBasicMaterial;
   /** Mallas que abren la carpeta al tocarlas. */
   hitTargets: THREE.Object3D[];
+  /**
+   * Mitades de cada anilla (bisagra junto a la placa). Para abrir: `rotation.z`
+   * de `ringHalves.right` negativa y de `ringHalves.left` positiva.
+   */
+  ringHalves: { left: THREE.Group[]; right: THREE.Group[] };
 }
 
 const { width: W, height: H, panel: P, radius: R, backZ, frontZ } = BINDER;
@@ -69,10 +74,28 @@ export function createBinder(kit: MaterialKit): BinderParts {
   mesh(roundedSlab(0.34, H - 0.7, 0.07, 0.14, 0.03), kit.metal, group, [RINGS.x - 0.02, 0, plateZ]);
   const rivet = new THREE.CylinderGeometry(0.05, 0.05, 0.03, 20).rotateX(Math.PI / 2);
   for (const y of [-(H - 1.1) / 2, (H - 1.1) / 2]) mesh(rivet, kit.metal, group, [RINGS.x, y, plateZ + 0.045]);
-  const ring = new THREE.TorusGeometry(RINGS.radius, RINGS.tube, 14, 64);
+  // Cada anilla son dos medias lunas con bisagra en el punto junto a la placa:
+  // se abren (como una carpeta de argollas real) al sacar o regresar un sobre.
+  const halfRing = (side: 1 | -1) =>
+    new THREE.TorusGeometry(RINGS.radius, RINGS.tube, 14, 32, Math.PI).rotateZ((-side * Math.PI) / 2).translate(0, RINGS.radius, 0);
+  const rightHalf = halfRing(1);
+  const leftHalf = halfRing(-1);
+  const ringHalves: BinderParts["ringHalves"] = { left: [], right: [] };
   for (const y of RINGS.ys) {
-    const r = mesh(ring, kit.metal, group, [RINGS.x, y, RINGS.z]);
-    r.rotation.x = Math.PI / 2; // plano XZ: atraviesa la pila de sobres
+    const ring = new THREE.Group();
+    ring.position.set(RINGS.x, y, RINGS.z);
+    ring.rotation.x = Math.PI / 2; // plano XZ: atraviesa la pila de sobres; local +Y = hacia el frente
+    group.add(ring);
+    for (const [geometry, list] of [
+      [rightHalf, ringHalves.right],
+      [leftHalf, ringHalves.left],
+    ] as const) {
+      const hinge = new THREE.Group();
+      hinge.position.y = -RINGS.radius; // bisagra: punto de la anilla junto a la placa
+      ring.add(hinge);
+      mesh(geometry, kit.metal, hinge, [0, 0, 0]);
+      list.push(hinge);
+    }
   }
 
   // ── Tapa delantera (articulada en el lomo) ────────────────────────────────
@@ -131,5 +154,5 @@ export function createBinder(kit: MaterialKit): BinderParts {
   mesh(new THREE.TorusGeometry(0.17, 0.018, 8, 36), kit.metal, strapTab, [-0.62, 0, 0.035]);
   strapTab.traverse((o) => hitTargets.push(o));
 
-  return { group, coverPivot, strapPivot, strapTab, coverShadow, hitTargets };
+  return { group, coverPivot, strapPivot, strapTab, coverShadow, hitTargets, ringHalves };
 }

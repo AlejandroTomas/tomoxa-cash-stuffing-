@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { toast } from "@/core/toast";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
@@ -35,6 +36,14 @@ function announce(view: OrganizerView, envelopes: readonly EnvelopeItem[]): stri
   return `Sobre ${name} fuera de la carpeta.`;
 }
 
+/** Cambio entre la tarjeta del sobre y el panel de documentos. */
+const cardSwap = (reduceMotion: boolean | null) => ({
+  initial: reduceMotion ? false : { opacity: 0, y: 16, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  exit: reduceMotion ? undefined : { opacity: 0, y: -10, scale: 0.98 },
+  transition: { duration: 0.22, ease: "easeOut" as const },
+});
+
 /** En escritorio la tarjeta no baja más allá de la fila de sobres; si no cabe, se desplaza dentro. */
 const cardHeight = "lg:max-h-[calc(84dvh-(min(51vw,1000px)-5rem)*0.139-1.5rem)] lg:overflow-y-auto";
 
@@ -50,6 +59,7 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
 export function OrganizerExperience() {
   const { view, selectedId, envelopes, balances, activityFor, moveMoney, previewStyle, commitStyle, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
     useOrganizerController();
+  const reduceMotion = useReducedMotion();
   const sceneRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -146,40 +156,51 @@ export function OrganizerExperience() {
           <EnvelopeTiles envelopes={envelopes} selectedId={selectedId} busy={busy} onSelect={(id) => void selectEnvelope(id)} />
         </div>
         <div ref={cardRef} className="lg:absolute lg:top-[13%] lg:right-[2%] lg:z-10 lg:w-[min(27.5%,540px)] lg:min-w-[380px]">
-          {view.stage === "browsing" || view.stage === "reading" ? (
-            <div className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, cardHeight)}>
-              <DocumentsPanel
-                item={item}
-                stage={view.stage}
-                busy={busy}
-                documents={documents}
-                visible={visibleDocuments}
-                documentId={view.documentId}
-                filter={filter}
-                onFilter={setFilter}
-                onPick={(id) => void perform({ type: "PICK_DOCUMENT", id })}
-                onReturnDocument={() => void perform({ type: "RETURN_DOCUMENT" })}
-                onStepDocument={stepDocument}
-                onCloseEnvelope={() => void perform({ type: "CLOSE_ENVELOPE" })}
-              />
-            </div>
-          ) : (
-            <EnvelopeDetailCard
-              item={item}
-              envelopes={envelopes}
-              activity={activityFor(item.id)}
-              onMoveMoney={() => setDialog("move")}
-              onEdit={() => setDialog("edit")}
-              stage={view.stage}
-              busy={busy}
-              onExtract={() => void extractSelected()}
-              onOpenEnvelope={() => void perform({ type: "OPEN_ENVELOPE" })}
-              onShow={() => void selectEnvelope(item.id)}
-              onStep={step}
-              onBack={back}
-              className={cardHeight}
-            />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {view.stage === "browsing" || view.stage === "reading" ? (
+              <motion.div
+                key="documents"
+                {...cardSwap(reduceMotion)}
+                className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, cardHeight)}
+              >
+                <DocumentsPanel
+                  item={item}
+                  stage={view.stage}
+                  busy={busy}
+                  documents={documents}
+                  visible={visibleDocuments}
+                  documentId={view.documentId}
+                  filter={filter}
+                  onFilter={setFilter}
+                  onPick={(id) => void perform({ type: "PICK_DOCUMENT", id })}
+                  onReturnDocument={() => void perform({ type: "RETURN_DOCUMENT" })}
+                  onStepDocument={stepDocument}
+                  onCloseEnvelope={() => void perform({ type: "CLOSE_ENVELOPE" })}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="detail"
+                {...cardSwap(reduceMotion)}
+              >
+                <EnvelopeDetailCard
+                  item={item}
+                  envelopes={envelopes}
+                  activity={activityFor(item.id)}
+                  onMoveMoney={() => setDialog("move")}
+                  onEdit={() => setDialog("edit")}
+                  stage={view.stage}
+                  busy={busy}
+                  onExtract={() => void extractSelected()}
+                  onOpenEnvelope={() => void perform({ type: "OPEN_ENVELOPE" })}
+                  onShow={() => void selectEnvelope(item.id)}
+                  onStep={step}
+                  onBack={back}
+                  className={cardHeight}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
       <MoveMoneyDialog
