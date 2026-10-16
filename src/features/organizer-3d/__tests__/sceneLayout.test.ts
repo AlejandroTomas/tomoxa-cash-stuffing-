@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, ENVELOPE, focusPose, RINGS, slotPose } from "../scene/layout";
+import { BINDER, DOCUMENT, ENVELOPE, fanPose, focusPose, insidePose, RINGS, slotPose } from "../scene/layout";
 import { envelopesMock } from "../mocks/envelopes.mock";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
@@ -106,4 +106,30 @@ describe("encuadre", () => {
       expect(ENVELOPE.width / 2).toBeLessThan((rig.distance - z) * tan * aspect);
     }
   });
+});
+
+describe("abanico de documentos", () => {
+  it("cada documento visible asoma por arriba del sobre y los guardados quedan dentro", () => {
+    const top = ENVELOPE.height / 2;
+    for (let count = 1; count <= DOCUMENT.maxFan; count++) {
+      for (let i = 0; i < count; i++) expect(fanPose(i, count).y + DOCUMENT.height / 2).toBeGreaterThan(top + 0.4);
+    }
+    expect(insidePose().y + DOCUMENT.height / 2).toBeLessThan(top);
+  });
+
+  it("no se sale de los lados del sobre", () => {
+    for (let i = 0; i < DOCUMENT.maxFan; i++) {
+      const pose = fanPose(i, DOCUMENT.maxFan);
+      expect(Math.abs(pose.x) + DOCUMENT.width / 2).toBeLessThan(ENVELOPE.width / 2);
+    }
+  });
+
+  it("el más reciente (0) queda al frente y a la derecha", () => {
+    const newest = fanPose(0, 5);
+    const oldest = fanPose(4, 5);
+    expect(newest.z).toBeGreaterThan(oldest.z);
+    expect(newest.x).toBeGreaterThan(oldest.x);
+  });
+
+  it("uno solo va centrado y derecho", () => expect(fanPose(0, 1)).toMatchObject({ x: 0, rz: 0 }));
 });

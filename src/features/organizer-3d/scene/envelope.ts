@@ -12,6 +12,8 @@ export interface EnvelopePart {
   group: THREE.Group;
   /** Lo mueve solo el hover; así no compite con las transiciones. */
   hover: THREE.Group;
+  /** Labio frontal de la boca del sobre: gira hacia el frente al abrirlo. */
+  mouth: THREE.Group;
   /** Orden de dibujo de las capas transparentes; el sobre activo va encima. */
   setLayer: (base: number) => void;
 }
@@ -85,7 +87,15 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
   // Cara frontal acolchada y esmerilada: deja ver el contenido difuso.
   add(geo.front, kit.plastic(item.color, { opacity: 0.74, roughness: 0.5, clearcoat: 0.6, lighten: 0.04 }), [0, -0.06, 0.012], 2);
   add(geo.weld, kit.plastic(item.color, { opacity: 0.88, roughness: 0.4, clearcoat: 0.5, lighten: 0.3 }), [0, 0, 0.03], 3);
-  add(geo.lip, kit.plastic(item.color, { opacity: 0.9, roughness: 0.35, clearcoat: 0.8, lighten: 0.5 }), [0, TOP - 0.07, 0.03], 3);
+  // Labio superior con bisagra en su borde inferior: la "boca" del sobre.
+  const mouth = new THREE.Group();
+  mouth.position.set(0, TOP - 0.13, 0.03);
+  hover.add(mouth);
+  const lip = new THREE.Mesh(geo.lip, kit.plastic(item.color, { opacity: 0.9, roughness: 0.35, clearcoat: 0.8, lighten: 0.5 }));
+  lip.position.y = 0.06;
+  lip.receiveShadow = true;
+  mouth.add(lip);
+  layered.push([lip, 3]);
 
   // Pestañas: una opaca en el borde izquierdo y otra translúcida asomando a la derecha.
   add(geo.leftTab, kit.plastic(deep, { opacity: 0.96, roughness: 0.45, clearcoat: 0.4 }), [-EW / 2 + 0.02, LABEL_Y - 0.16, 0.02], 3);
@@ -106,5 +116,5 @@ export function createEnvelope(item: EnvelopeItem, index: number, kit: MaterialK
 
   const setLayer = (base: number) => layered.forEach(([m, layer]) => (m.renderOrder = base + layer));
   setLayer(10 + index * 5);
-  return { item, index, group, hover, setLayer };
+  return { item, index, group, hover, mouth, setLayer };
 }

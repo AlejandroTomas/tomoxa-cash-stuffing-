@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportError } from "@/core/logger";
+import { sortByRecent } from "../domain/document";
+import { describeFilter, EMPTY_FILTER, filterDocuments, type DocumentFilter } from "../domain/documentFilter";
+import { documentsOf } from "../mocks/documents.mock";
 import { neighborEnvelope, type EnvelopeId } from "../mocks/envelopes.mock";
-import { initialView, transitionView, type OrganizerAction, type OrganizerView } from "../domain/organizerView";
+import { backAction, initialView, isEnvelopeOut, transitionView, type OrganizerAction, type OrganizerView } from "../domain/organizerView";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "../scene/organizerScene";
 
 /**
@@ -29,6 +32,30 @@ export function useOrganizerController() {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
 
+  // ── Documentos del sobre seleccionado y su filtro ─────────────────────────
+  const [filter, setFilterState] = useState<DocumentFilter>(EMPTY_FILTER);
+  const documents = useMemo(() => sortByRecent(documentsOf(selectedId)), [selectedId]);
+  const visibleDocuments = useMemo(() => filterDocuments(documents, filter), [documents, filter]);
+  const documentsRef = useRef({ all: documents, visible: visibleDocuments });
+  const filterRef = useRef(filter);
+  useEffect(() => {
+    documentsRef.current = { all: documents, visible: visibleDocuments };
+    filterRef.current = filter;
+  }, [documents, visibleDocuments, filter]);
+  // Cada sobre empieza sin filtro.
+  const [filterOwner, setFilterOwner] = useState(selectedId);
+  if (filterOwner !== selectedId) {
+    setFilterOwner(selectedId);
+    setFilterState(EMPTY_FILTER);
+  }
+
+  /** Cambia el filtro y reacomoda el abanico (sin bloquear la interfaz). */
+  const setFilter = useCallback((next: DocumentFilter) => {
+    setFilterState(next);
+    const ids = filterDocuments(documentsRef.current.all, next).map((doc) => doc.id);
+    sceneRef.current?.showDocuments(ids, describeFilter(next));
+  }, []);
+
   const perform = useCallback(async (action: OrganizerAction): Promise<boolean> => {
     if (busyRef.current) return false;
     const before = viewRef.current;
@@ -45,6 +72,12 @@ export function useOrganizerController() {
         else if (action.type === "CLEAR_FOCUS") await scene.clearFocus();
         else if (action.type === "EXTRACT" && before.activeId) await scene.extract(before.activeId);
         else if (action.type === "RETURN" && before.activeId) await scene.returnEnvelope(before.activeId);
+        else if (action.type === "OPEN_ENVELOPE") {
+          const { all, visible } = documentsRef.current;
+          await scene.openEnvelope(all, visible.map((doc) => doc.id), describeFilter(filterRef.current));
+        } else if (action.type === "CLOSE_ENVELOPE") await scene.closeEnvelope();
+        else if (action.type === "PICK_DOCUMENT") await scene.pickDocument(action.id);
+        else if (action.type === "RETURN_DOCUMENT") await scene.returnDocument();
       }
       viewRef.current = after;
       setView(after);
@@ -59,19 +92,27 @@ export function useOrganizerController() {
     }
   }, []);
 
+  /** Guarda lo que esté fuera (documento → solapa → sobre) hasta dejar el sobre enfocado. */
+  const putEnvelopeBack = useCallback(async () => {
+    while (isEnvelopeOut(viewRef.current.stage)) {
+      const action = backAction(viewRef.current.stage);
+      if (!action || !(await perform(action))) return;
+    }
+  }, [perform]);
+
   /** Lleva a cualquier sobre al frente desde cualquier estado (abre o regresa lo necesario). */
   const selectEnvelope = useCallback(
     async (id: EnvelopeId) => {
       if (busyRef.current) return;
       if (viewRef.current.stage === "closed") await perform({ type: "OPEN" });
       const current = viewRef.current;
-      if (current.stage === "extracted") {
+      if (isEnvelopeOut(current.stage)) {
         if (current.activeId === id) return;
-        await perform({ type: "RETURN" });
+        await putEnvelopeBack();
       }
       await perform({ type: "FOCUS", id });
     },
-    [perform],
+    [perform, putEnvelopeBack],
   );
 
   /** Extrae el sobre seleccionado, abriendo y enfocando antes si hace falta. */
@@ -94,12 +135,22 @@ export function useOrganizerController() {
     [selectEnvelope],
   );
 
-  /** Retrocede un nivel: extraído → enfocado → abierto → cerrado. */
+  /** Saca el documento siguiente/anterior entre los que pasan el filtro. */
+  const stepDocument = useCallback(
+    (direction: -1 | 1) => {
+      const { visible } = documentsRef.current;
+      if (!visible.length) return;
+      const current = visible.findIndex((doc) => doc.id === viewRef.current.documentId);
+      const index = current === -1 ? (direction === 1 ? 0 : visible.length - 1) : (current + direction + visible.length) % visible.length;
+      void perform({ type: "PICK_DOCUMENT", id: visible[index].id });
+    },
+    [perform],
+  );
+
+  /** Retrocede un nivel: documento → sobre abierto → extraído → enfocado → abierta → cerrada. */
   const back = useCallback(() => {
-    const { stage } = viewRef.current;
-    if (stage === "extracted") void perform({ type: "RETURN" });
-    else if (stage === "focused") void perform({ type: "CLEAR_FOCUS" });
-    else if (stage === "open") void perform({ type: "CLOSE" });
+    const action = backAction(viewRef.current.stage);
+    if (action) void perform(action);
   }, [perform]);
 
   const onIntent = useCallback(
@@ -109,8 +160,14 @@ export function useOrganizerController() {
         if (current.stage === "closed") void perform({ type: "OPEN" });
         return;
       }
-      if (current.stage === "extracted") {
-        if (intent.id === current.activeId) void perform({ type: "RETURN" });
+      if (intent.type === "document") {
+        if (current.stage === "reading" && current.documentId === intent.id) void perform({ type: "RETURN_DOCUMENT" });
+        else void perform({ type: "PICK_DOCUMENT", id: intent.id });
+        return;
+      }
+      // Con el sobre fuera, tocarlo lo abre; los demás sobres no responden.
+      if (isEnvelopeOut(current.stage)) {
+        if (intent.id === current.activeId && current.stage === "extracted") void perform({ type: "OPEN_ENVELOPE" });
         return;
       }
       if (current.stage === "focused" && intent.id === current.activeId) void perform({ type: "EXTRACT" });
@@ -126,7 +183,12 @@ export function useOrganizerController() {
     try {
       await api.open();
       if (activeId && stage !== "open") await api.focus(activeId);
-      if (activeId && stage === "extracted") await api.extract(activeId);
+      if (activeId && isEnvelopeOut(stage)) await api.extract(activeId);
+      if (stage === "browsing" || stage === "reading") {
+        const { all, visible } = documentsRef.current;
+        await api.openEnvelope(all, visible.map((doc) => doc.id), describeFilter(filterRef.current));
+        if (stage === "reading" && viewRef.current.documentId) await api.pickDocument(viewRef.current.documentId);
+      }
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -171,17 +233,25 @@ export function useOrganizerController() {
       }
       const arrows: Record<string, -1 | 1> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
       const direction = arrows[event.key];
-      if (!direction || viewRef.current.stage === "closed") return;
+      const { stage } = viewRef.current;
+      if (!direction || stage === "closed" || stage === "extracted") return;
       event.preventDefault();
-      step(direction);
+      // Con el sobre abierto las flechas recorren sus documentos.
+      if (stage === "browsing" || stage === "reading") stepDocument(direction);
+      else step(direction);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [back, step]);
+  }, [back, step, stepDocument]);
 
   return {
     view,
     selectedId,
+    documents,
+    visibleDocuments,
+    filter,
+    setFilter,
+    stepDocument,
     busy,
     sceneReady,
     unavailable,

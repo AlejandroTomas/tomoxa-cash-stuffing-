@@ -1,6 +1,6 @@
 # Abrir un sobre, ver sus documentos y buscarlos a mano
 
-**Estado:** abierta, diseño cerrado (2026-10-15). Lista para implementar por fases.
+**Estado:** implementada (2026-10-15), pendiente de revisión del usuario y commit. Al aprobarla, borrar esta spec.
 **Feature:** `src/features/organizer-3d` (ver su README).
 
 ## Qué se pidió
@@ -118,15 +118,15 @@ Crear, editar o borrar documentos y adjuntar fotos de tickets (fase 2). Nada se 
 
 ## Criterios de aceptación
 
-- [ ] Se abre cualquier sobre extraído y se ven sus documentos; se saca y regresa cualquiera.
-- [ ] Cada filtro reduce el abanico y la lista a lo mismo; el contador coincide.
-- [ ] La frase en cursiva se escribe con animación y coincide con el filtro aplicado.
-- [ ] Semana lunes–domingo correcta en cambios de mes y de año; fechas locales sin corrimiento UTC.
-- [ ] Teclado completo (Escape retrocede; lista navegable) y `aria-live` con el resultado.
-- [ ] Reduce-motion: sin animaciones de escritura ni de abanico.
-- [ ] Al cerrar el sobre se liberan geometrías y texturas de los documentos (sin fugas al
-      abrir/cerrar 10 veces).
-- [ ] 375 / 768 / 1440 px sin recortes ni scroll horizontal; `pnpm verify` y `pnpm build` pasan.
+- [x] Se abre cualquier sobre extraído y se ven sus documentos; se saca y regresa cualquiera.
+- [x] Cada filtro reduce el abanico y la lista a lo mismo; el contador coincide.
+- [x] La frase en cursiva se escribe con animación y coincide con el filtro aplicado.
+- [x] Semana lunes–domingo correcta en cambios de mes y de año; fechas locales sin corrimiento UTC (tests).
+- [x] Teclado completo (Escape retrocede; flechas recorren documentos) y `aria-live` con el resultado.
+- [ ] Reduce-motion: implementado, sin probar en navegador.
+- [x] Al cerrar el sobre se liberan geometrías y texturas (10 ciclos sin errores; memoria no medida).
+- [x] 375 y 1565 px sin scroll horizontal; claro y oscuro. 768 px sin revisar con el sobre abierto.
+- [x] `pnpm verify` y `pnpm build` pasan.
 
 ## Fases de implementación
 

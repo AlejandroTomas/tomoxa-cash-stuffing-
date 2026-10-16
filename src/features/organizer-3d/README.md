@@ -10,14 +10,20 @@ solo muestran un aviso.
 ## Piezas
 
 ```
-mocks/envelopes.mock.ts        Sobres de demostración (nombre, color, icono, importe, movimientos)
-domain/organizerView.ts        Máquina de estados visual: closed → open → focused ⇄ extracted
+mocks/envelopes.mock.ts        Sobres de demostración (nombre, color, icono, importe)
+mocks/documents.mock.ts        Movimientos ficticios de cada sobre (única fuente; la tarjeta cuenta de aquí)
+domain/organizerView.ts        Máquina de estados visual: closed → open → focused ⇄ extracted ⇄ browsing ⇄ reading
+domain/document.ts             Documento = movimiento; actividad derivada (movimientos, último)
+domain/documentFilter.ts       Filtros (día, fecha, semana lun–dom, mes, texto) y la frase que los describe
+domain/localDate.ts            Fechas "YYYY-MM-DD" locales (sin corrimiento UTC)
 components/
   OrganizerExperience.tsx      Composición a pantalla completa y medición de la "zona libre"
   useOrganizerController.ts    Una acción a la vez; intro (abre sola); teclado (flechas, Escape)
   OrganizerNav.tsx             Barra de vidrio: marca, secciones, tema claro/oscuro, perfil demo
   EnvelopeDetailCard.tsx       Tarjeta del sobre seleccionado (monto, movimientos, acciones)
   EnvelopeTiles.tsx            Fila de seis sobres: alternativa HTML completa al lienzo
+  DocumentsPanel.tsx           Sobre abierto: frase en caligrafía, filtros, lista y documento fuera
+  HandwrittenText.tsx · fonts.ts  Caligrafía Caveat (next/font) que "se escribe" letra por letra
   OrganizerBackdrop.tsx/.css   Fondo de habitación desenfocada (CSS; foto opcional)
   OrganizerCanvas.tsx          Monta/desmonta la escena (solo cliente, next/dynamic ssr:false)
 scene/                         Three.js directo, sin React
@@ -25,7 +31,9 @@ scene/                         Three.js directo, sin React
   stage.ts                     Renderer, luces, entorno procedural (RoomEnvironment), sombras
   binder.ts · envelope.ts      Carpeta (lomo, anillas, correa, banda, hojas) y sobres (bolsa esmerilada, pestañas)
   materials.ts · labels.ts     Materiales compartidos (un dueño, se liberan juntos) y etiquetas en canvas
-  layout.ts · framing.ts       Medidas, bolsillos/abanico y encuadre de cámara: puro, con tests
+  documents.ts · documentTexture.ts  Tickets del sobre abierto (se crean al abrir, se liberan al cerrar)
+  captionTag.ts                Etiqueta de papel con la frase de búsqueda, escrita en la escena
+  layout.ts · framing.ts       Medidas, bolsillos, abanicos y encuadre de cámara: puro, con tests
 ```
 
 ## Decisiones
@@ -45,6 +53,16 @@ scene/                         Three.js directo, sin React
   ambos temas. El resto usa tokens; el coral de marca es `--primary` en `globals.css`.
 - `prefers-reduced-motion`: duraciones en 0, sin flotación ni paralaje. Sin WebGL: aviso y
   la fila de sobres + tarjeta siguen funcionando.
+
+## Abrir el sobre y buscar documentos
+
+Sobre extraído → "Abrir sobre" (o tocarlo): el labio se inclina y los movimientos
+asoman como tickets en abanico (máx. 8; el más reciente al frente). La búsqueda
+(Todo · Día · Semana · Mes · Fecha + texto) reacomoda el abanico y la frase que la
+describe (`describeFilter`) se escribe en Caveat en la tarjeta y en una etiqueta de
+papel sobre el sobre. Tocar un ticket (o la lista) lo saca al frente; Escape retrocede
+un nivel. El sobre presentado siempre queda delante de la pila; en pantallas angostas
+se achica en lugar de meterse entre los demás. Spec: `.ia/tasks/sobre-documentos-y-busqueda.md`.
 
 ## Fondo fotográfico
 

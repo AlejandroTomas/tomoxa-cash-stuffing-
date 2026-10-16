@@ -1,11 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft, ArrowLeftRight, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { ArrowLeftRight, FolderOpen, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "@/core/toast";
 import { cn } from "@/lib/utils";
+import { summarizeActivity } from "../domain/document";
+import { parseLocalDate } from "../domain/localDate";
+import { documentsOf } from "../mocks/documents.mock";
 import { envelopesMock, type EnvelopeItem } from "../mocks/envelopes.mock";
 import type { Stage } from "../domain/organizerView";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
@@ -18,8 +21,7 @@ export const formatAmount = (amount: number) => `$ ${amountFormat.format(amount)
 
 /** Fecha ISO local (YYYY-MM-DD) → "6 oct 2026". */
 export function formatShortDate(iso: string): string {
-  const [year, month, day] = iso.split("-").map(Number);
-  return dateFormat.format(new Date(year, month - 1, day)).replace(/\./g, "");
+  return dateFormat.format(parseLocalDate(iso)).replace(/\./g, "");
 }
 
 interface EnvelopeDetailCardProps {
@@ -27,21 +29,23 @@ interface EnvelopeDetailCardProps {
   stage: Stage;
   busy: boolean;
   onExtract: () => void;
-  onReturn: () => void;
+  /** Con el sobre extraído, el botón principal lo abre para ver sus documentos. */
+  onOpenEnvelope: () => void;
   onShow: () => void;
   onStep: (direction: -1 | 1) => void;
   onBack: () => void;
   className?: string;
 }
 
-const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
+export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
 /** Tarjeta de vidrio con el detalle del sobre seleccionado. Importes de demostración. */
-export function EnvelopeDetailCard({ item, stage, busy, onExtract, onReturn, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
+export function EnvelopeDetailCard({ item, stage, busy, onExtract, onOpenEnvelope, onShow, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const index = envelopesMock.findIndex((envelope) => envelope.id === item.id);
   const extracted = stage === "extracted";
+  const activity = summarizeActivity(documentsOf(item.id));
   const soon = () => toast.info("Disponible en la siguiente fase. Esta es una demostración visual.");
 
   return (
@@ -94,12 +98,12 @@ export function EnvelopeDetailCard({ item, stage, busy, onExtract, onReturn, onS
             <div className="flex items-center gap-3 py-3">
               <Plus className="size-4.5 rounded-sm border border-muted-foreground/60 p-px text-muted-foreground" aria-hidden="true" />
               <dt className="flex-1 text-foreground/80">Movimientos</dt>
-              <dd className="font-medium text-foreground tabular-nums">{item.movements}</dd>
+              <dd className="font-medium text-foreground tabular-nums">{activity.movements}</dd>
             </div>
             <div className="flex items-center gap-3 py-3">
               <Clock3 className="size-4.5 text-muted-foreground" aria-hidden="true" />
               <dt className="flex-1 text-foreground/80">Último movimiento</dt>
-              <dd className="font-medium text-foreground tabular-nums">{formatShortDate(item.lastMovement)}</dd>
+              <dd className="font-medium text-foreground tabular-nums">{activity.lastMovement ? formatShortDate(activity.lastMovement) : "—"}</dd>
             </div>
           </dl>
         </motion.div>
@@ -108,10 +112,10 @@ export function EnvelopeDetailCard({ item, stage, busy, onExtract, onReturn, onS
       <Button
         className="mt-5 h-14 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/30 [&_svg:not([class*='size-'])]:size-5"
         disabled={busy}
-        onClick={extracted ? onReturn : onExtract}
+        onClick={extracted ? onOpenEnvelope : onExtract}
       >
-        {extracted ? <ArrowLeft /> : <Upload />}
-        {extracted ? "Regresar sobre" : "Extraer sobre"}
+        {extracted ? <FolderOpen /> : <Upload />}
+        {extracted ? "Abrir sobre" : "Extraer sobre"}
       </Button>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <Button variant="outline" className="h-12 rounded-2xl border-card/70 bg-card/70" onClick={soon}>

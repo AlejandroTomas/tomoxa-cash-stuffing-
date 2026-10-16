@@ -71,3 +71,46 @@ export function focusPose(index: number, fanned = true): SlotPose {
   const slot = slotPose(index, fanned);
   return { ...slot, y: slot.y + FOCUS_LIFT * Math.cos(slot.rx), z: slot.z + FOCUS_LIFT * Math.sin(slot.rx) + 0.01 };
 }
+
+/** Documentos (tickets) dentro de un sobre abierto. */
+export const DOCUMENT = {
+  width: 1.25,
+  height: 1.7,
+  /** Máximo de documentos en el abanico; el resto queda en la lista HTML. */
+  maxFan: 8,
+  /** Altura del documento guardado (centro, en coordenadas del sobre). */
+  insideY: -0.3,
+  /** Cuánto sube un documento visible: asoma por arriba del sobre. */
+  rise: 1.2,
+} as const;
+
+export interface DocumentPose {
+  x: number;
+  y: number;
+  z: number;
+  rz: number;
+}
+
+/** Documento guardado dentro del sobre (coordenadas del sobre). */
+export function insidePose(order = 0): DocumentPose {
+  return { x: 0.05 * (order % 3) - 0.05, y: DOCUMENT.insideY, z: -0.03 + order * 0.0015, rz: 0 };
+}
+
+/**
+ * Posición del documento `index` (0 = más reciente) de `count` visibles: en
+ * abanico sobre el borde superior del sobre. El más reciente queda a la
+ * derecha y al frente, completo; de los anteriores asoma su esquina izquierda
+ * (tipo, concepto y monto).
+ */
+export function fanPose(index: number, count: number): DocumentPose {
+  const n = Math.max(1, Math.min(count, DOCUMENT.maxFan));
+  const t = n === 1 ? 0.5 : 1 - index / (n - 1);
+  const spread = Math.min(ENVELOPE.width - DOCUMENT.width - 0.35, (n - 1) * 0.42);
+  const offset = t - 0.5;
+  return {
+    x: -spread / 2 + spread * t,
+    y: DOCUMENT.insideY + DOCUMENT.rise - Math.abs(offset) * 0.18,
+    z: -0.028 + (n - 1 - index) * 0.0035,
+    rz: n === 1 ? 0 : -offset * 0.2,
+  };
+}

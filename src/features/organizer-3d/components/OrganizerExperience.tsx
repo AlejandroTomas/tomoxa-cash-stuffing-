@@ -5,8 +5,11 @@ import { useEffect, useRef } from "react";
 import { BookOpen, ChevronRight } from "lucide-react";
 import { getEnvelope } from "../mocks/envelopes.mock";
 import type { OrganizerView } from "../domain/organizerView";
-import { EnvelopeDetailCard } from "./EnvelopeDetailCard";
+import { cn } from "@/lib/utils";
+import { DocumentsPanel } from "./DocumentsPanel";
+import { EnvelopeDetailCard, glass } from "./EnvelopeDetailCard";
 import { EnvelopeTiles } from "./EnvelopeTiles";
+import { handwriting } from "./fonts";
 import { OrganizerBackdrop } from "./OrganizerBackdrop";
 import { OrganizerNav } from "./OrganizerNav";
 import { useOrganizerController } from "./useOrganizerController";
@@ -21,8 +24,13 @@ function announce(view: OrganizerView): string {
   if (view.stage === "closed") return "Carpeta cerrada.";
   if (view.stage === "open") return "Carpeta abierta. Elige un sobre.";
   if (view.stage === "focused") return `Sobre ${name} seleccionado.`;
+  if (view.stage === "browsing") return `Sobre ${name} abierto. Elige un documento.`;
+  if (view.stage === "reading") return "Documento fuera del sobre.";
   return `Sobre ${name} fuera de la carpeta.`;
 }
+
+/** En escritorio la tarjeta no baja más allá de la fila de sobres; si no cabe, se desplaza dentro. */
+const cardHeight = "lg:max-h-[calc(84dvh-(min(51vw,1000px)-5rem)*0.139-1.5rem)] lg:overflow-y-auto";
 
 function overlaps(outer: DOMRect, inner: DOMRect): boolean {
   return inner.left < outer.right && inner.right > outer.left && inner.top < outer.bottom && inner.bottom > outer.top;
@@ -34,7 +42,8 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * importes vienen del mock y nada mueve dinero real.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } = useOrganizerController();
+  const { view, selectedId, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+    useOrganizerController();
   const sceneRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -66,7 +75,7 @@ export function OrganizerExperience() {
   }, [setSafeArea]);
 
   return (
-    <main className="relative isolate min-h-dvh overflow-x-clip lg:h-dvh lg:min-h-[720px] lg:overflow-hidden">
+    <main className={`${handwriting.variable} relative isolate min-h-dvh overflow-x-clip lg:h-dvh lg:min-h-[720px] lg:overflow-hidden`}>
       <OrganizerBackdrop />
       <div ref={navRef} className="relative z-20 lg:absolute lg:inset-x-[3%] lg:top-[2.4%]">
         <OrganizerNav />
@@ -114,17 +123,36 @@ export function OrganizerExperience() {
           className="lg:absolute lg:right-[1.6%] lg:bottom-[2.6%] lg:z-10 lg:w-[min(51%,1000px)]"
         />
         <div ref={cardRef} className="lg:absolute lg:top-[13%] lg:right-[2%] lg:z-10 lg:w-[min(27.5%,540px)] lg:min-w-[380px]">
-          <EnvelopeDetailCard
-            item={item}
-            stage={view.stage}
-            busy={busy}
-            onExtract={() => void extractSelected()}
-            onReturn={() => void perform({ type: "RETURN" })}
-            onShow={() => void selectEnvelope(item.id)}
-            onStep={step}
-            onBack={back}
-            className="lg:max-h-[calc(84dvh-(min(51vw,1000px)-5rem)*0.139-1.5rem)] lg:overflow-y-auto"
-          />
+          {view.stage === "browsing" || view.stage === "reading" ? (
+            <div className={cn("rounded-[1.75rem] p-5 lg:p-6", glass, cardHeight)}>
+              <DocumentsPanel
+                item={item}
+                stage={view.stage}
+                busy={busy}
+                documents={documents}
+                visible={visibleDocuments}
+                documentId={view.documentId}
+                filter={filter}
+                onFilter={setFilter}
+                onPick={(id) => void perform({ type: "PICK_DOCUMENT", id })}
+                onReturnDocument={() => void perform({ type: "RETURN_DOCUMENT" })}
+                onStepDocument={stepDocument}
+                onCloseEnvelope={() => void perform({ type: "CLOSE_ENVELOPE" })}
+              />
+            </div>
+          ) : (
+            <EnvelopeDetailCard
+              item={item}
+              stage={view.stage}
+              busy={busy}
+              onExtract={() => void extractSelected()}
+              onOpenEnvelope={() => void perform({ type: "OPEN_ENVELOPE" })}
+              onShow={() => void selectEnvelope(item.id)}
+              onStep={step}
+              onBack={back}
+              className={cardHeight}
+            />
+          )}
         </div>
       </div>
     </main>
