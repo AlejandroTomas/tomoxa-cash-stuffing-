@@ -427,8 +427,9 @@ export function useOrganizerController() {
       if (stage === "browsing" || stage === "reading") stepDocument(direction);
       else step(direction);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    // En captura: así se revisa antes de que el diálogo u hoja se cierre con ese mismo Escape.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [back, step, stepDocument]);
 
   return {
