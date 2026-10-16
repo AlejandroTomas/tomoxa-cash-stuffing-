@@ -34,7 +34,7 @@ export default function DashboardPage() {
       <PageScaffold
         title="Dashboard"
         subtitle="Ejemplo de tablero con KPIs"
-        icon={<LayoutDashboard className="h-5 w-5 text-white" />}
+        icon={<LayoutDashboard className="h-5 w-5" />}
         headerActions={<Badge variant="outline">Datos de ejemplo</Badge>}
       >
         <div className="space-y-6">

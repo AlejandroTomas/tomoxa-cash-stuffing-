@@ -13,7 +13,7 @@ export default function ExamplePage() {
       <PageScaffold
         title="Feature de ejemplo"
         subtitle="features/_example: todas las capas, listo para copiar"
-        icon={<ListChecks className="h-5 w-5 text-white" />}
+        icon={<ListChecks className="h-5 w-5" />}
       >
         <div className="mx-auto max-w-2xl">
           <TaskBoard />

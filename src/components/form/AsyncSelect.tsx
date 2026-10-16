@@ -191,7 +191,7 @@ const AsyncSelect: React.FC<AsyncSelectProps> = ({
           disabled={!inputValue.trim()}
           className="absolute right-2 top-1/2 -translate-y-1/2"
         >
-          <SendHorizonal className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          <SendHorizonal className="h-5 w-5 text-primary" />
         </Button>
       </div>
 
@@ -203,7 +203,7 @@ const AsyncSelect: React.FC<AsyncSelectProps> = ({
         >
           {isLoading ? (
             <div className="p-4 flex flex-col items-center gap-2">
-              <div className="animate-spin h-4 w-4 border-2 border-blue-500 dark:border-blue-400 border-t-transparent rounded-full" />
+              <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
               <span className="text-sm text-muted-foreground text-center">
                 {loadingMessage}
               </span>
@@ -215,9 +215,9 @@ const AsyncSelect: React.FC<AsyncSelectProps> = ({
                   key={option.value || index}
                   className={`px-4 py-2 cursor-pointer transition-colors text-foreground ${
                     highlightedIndex === index
-                      ? "bg-blue-100 dark:bg-blue-900/30"
+                      ? "bg-accent"
                       : selectedOption?.value === option.value
-                        ? "bg-blue-50 dark:bg-blue-900/20"
+                        ? "bg-primary/10"
                         : "bg-card"
                   } hover:bg-muted`}
                   onClick={() => handleOptionClick(option)}

@@ -236,15 +236,15 @@ const SpotlightSearch: React.FC<SpotlightSearchProps> = ({ onAction }) => {
                     <div
                       className={`h-10 w-10 rounded-lg flex items-center justify-center ${
                         item.type === "page"
-                          ? "bg-blue-100 dark:bg-blue-900/30"
-                          : "bg-green-100 dark:bg-green-900/30"
+                          ? "bg-info/15"
+                          : "bg-success/15"
                       }`}
                     >
                       <Icon
                         className={`h-5 w-5 ${
                           item.type === "page"
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-green-600 dark:text-green-400"
+                            ? "text-info"
+                            : "text-success"
                         }`}
                       />
                     </div>

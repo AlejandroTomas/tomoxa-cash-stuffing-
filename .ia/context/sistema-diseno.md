@@ -25,7 +25,7 @@ En oklch, con dos juegos (`:root` y `.dark`). **Se usan por nombre, nunca por va
 | Superficie | `background`, `card`, `popover` | Fondo de página, tarjeta, flotante |
 | Texto | `foreground`, `muted-foreground`, `*-foreground` | Principal y secundario |
 | Acento | `primary`, `secondary`, `accent`, `muted` | Acciones y realces |
-| Estado | `destructive` | Borrar, error, riesgo |
+| Estado | `destructive`, `success`, `warning`, `info` (+ `*-foreground`) | Error y riesgo; éxito; aviso; información. Fondo suave: `bg-success/15` |
 | Trazo | `border`, `input`, `ring` | Bordes, campos, foco |
 | Nav | `sidebar`, `sidebar-*` | El menú lateral |
 | Datos | `chart-1` … `chart-5` | Series de gráficas |
@@ -38,9 +38,10 @@ bien en claro y se rompe en oscuro. Excepciones válidas, y solo éstas:
 2. **Paleta propia intencional, igual en ambos temas:** el notch de toasts y
    alertas (`core/toast/tokens.ts`) y `NetworkBanner` se leen como avisos del sistema.
 3. Color funcional (el fondo blanco de un QR que se escanea).
+4. Velo detrás de un modal (`bg-black/50`), igual que en las primitivas de `ui/`.
 
-Pendiente: barrer los colores fijos que quedan en componentes heredados (ver
-`../tasks/tokens-de-color.md`). Un archivo que tocas se pasa a tokens.
+Para revisar: `grep -rnE "(bg|text|border|ring|from|to|via)-(white|black|gray|slate|neutral|red|green|blue|orange|indigo|purple|pink)" src --include="*.tsx"`
+(fuera de `ui/`) solo debe dar velos y `NetworkBanner`.
 
 ## Radios
 

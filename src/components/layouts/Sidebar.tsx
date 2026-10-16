@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import LogOutBtn from "@/components/auth/LogOutBtn";
 import { useSession } from "@/hooks/useSession";
@@ -92,8 +92,8 @@ const NavItem = ({
   onNavigate?: () => void;
 }) => {
   const router = useRouter();
-  //   const isActive = !!item.url && router.route === item.url;
-  const isActive = false;
+  const pathname = usePathname();
+  const isActive = !!item.url && pathname === item.url;
   const Icon = icons[item.icon];
 
   const handleClick = () => {
@@ -110,18 +110,18 @@ const NavItem = ({
         "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
         "transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         isActive
-          ? "bg-indigo-50 text-indigo-700 dark:bg-white dark:text-gray-900"
-          : "text-sidebar-foreground/60 hover:bg-white/10 hover:text-sidebar-foreground dark:hover:bg-white/8",
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
       )}
     >
       {isActive && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-indigo-500 dark:bg-gray-700" />
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
       )}
       <Icon
         className={cn(
           "h-4.5 w-4.5 shrink-0",
           isActive
-            ? "text-indigo-600 dark:text-gray-800"
+            ? "text-primary"
             : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground",
         )}
       />
@@ -149,7 +149,7 @@ const NavItem = ({
 
 // ─── Logo mark ────────────────────────────────────────────────────────────────
 const LogoMark = ({ letter }: { letter: string }) => (
-  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-sm shadow-md select-none">
+  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm shadow-md select-none">
     {letter}
   </div>
 );
@@ -197,7 +197,7 @@ const SidebarContent = ({
             <TooltipTrigger asChild>
               <button
                 aria-label="Buscar"
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-sidebar-foreground/50 hover:bg-white/10 hover:text-sidebar-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
                 <Search className="h-4 w-4" />
               </button>
@@ -207,7 +207,7 @@ const SidebarContent = ({
             </TooltipContent>
           </Tooltip>
         ) : (
-          <label className="flex items-center gap-2 rounded-xl bg-white/8 dark:bg-white/5 px-3 py-2 ring-1 ring-white/10 focus-within:ring-indigo-500/50 transition-all">
+          <label className="flex items-center gap-2 rounded-xl bg-sidebar-accent/60 px-3 py-2 ring-1 ring-sidebar-border focus-within:ring-sidebar-ring transition-all">
             <Search className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/40" />
             <input
               type="search"
@@ -241,7 +241,7 @@ const SidebarContent = ({
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarImage src="" />
-            <AvatarFallback className="bg-indigo-500/25 text-white text-[10px] font-bold border border-white/10">
+            <AvatarFallback className="bg-primary/25 text-sidebar-foreground text-[10px] font-bold border border-sidebar-border">
               {userName.substring(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
@@ -315,7 +315,7 @@ const MobileNavbar = ({
           >
             <Bell className="h-4 w-4" />
             {notifications > 0 && (
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-[10px]">
+              <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-destructive text-[10px]">
                 {notifications}
               </Badge>
             )}
@@ -431,7 +431,7 @@ const AppLayout = ({
           <button
             onClick={() => setMobileOpen(false)}
             aria-label="Cerrar menú"
-            className="absolute right-3 top-4 z-10 flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/40 hover:bg-white/10 hover:text-sidebar-foreground transition-colors"
+            className="absolute right-3 top-4 z-10 flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/40 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors"
           >
             <X className="h-4 w-4" />
           </button>

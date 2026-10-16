@@ -101,12 +101,12 @@ class ErrorBoundary extends React.Component<
       const isDevelopment = process.env.NODE_ENV === "development";
 
       return (
-        <div className="w-full min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-background to-orange-50 dark:from-red-950/10 dark:via-background dark:to-orange-950/10 p-4">
+        <div className="w-full min-h-screen flex items-center justify-center bg-gradient-to-br from-destructive/5 via-background to-warning/5 p-4">
           <Card className="w-full max-w-2xl shadow-2xl border-2 border-border">
             <CardHeader className="text-center space-y-4 pb-4">
               <div className="flex justify-center">
-                <div className="h-20 w-20 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center animate-pulse">
-                  <AlertTriangle className="h-10 w-10 text-white" />
+                <div className="h-20 w-20 bg-gradient-to-br from-destructive to-warning rounded-full flex items-center justify-center animate-pulse">
+                  <AlertTriangle className="h-10 w-10 text-primary-foreground" />
                 </div>
               </div>
               <div>
@@ -135,7 +135,7 @@ class ErrorBoundary extends React.Component<
                   >
                     {this.state.copied ? (
                       <>
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-success" />
                         Copiado
                       </>
                     ) : (
@@ -166,7 +166,7 @@ class ErrorBoundary extends React.Component<
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button
                   onClick={this.handleReload}
-                  className="gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+                  className="gap-2"
                   size="lg"
                 >
                   <RefreshCw className="h-5 w-5" />
@@ -192,9 +192,9 @@ class ErrorBoundary extends React.Component<
 
               {/* Solo en desarrollo: detalles completos */}
               {isDevelopment && this.state.error && (
-                <Card className="border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20">
+                <Card className="border-destructive/30 bg-destructive/10">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2 text-red-700 dark:text-red-400">
+                    <CardTitle className="text-base flex items-center gap-2 text-destructive">
                       <Bug className="h-5 w-5" />
                       ⚠️ Información de desarrollo
                     </CardTitle>

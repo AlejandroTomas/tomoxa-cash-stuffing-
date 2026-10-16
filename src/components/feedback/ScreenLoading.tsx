@@ -7,16 +7,16 @@ const ScreenLoading: FC = () => {
         {/* Outer rotating gradient ring */}
         <div
           className="absolute inset-0 rounded-full animate-spin-slow
-                     bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
+                     bg-gradient-to-r from-primary via-chart-4 to-chart-1"
         >
           {/* Blurred layers for glow effect */}
-          <span className="absolute inset-0 rounded-full bg-gradient-to-l from-blue-500 via-purple-500 to-pink-500 blur-sm" />
-          <span className="absolute inset-0 rounded-full bg-gradient-to-l from-blue-500 via-purple-500 to-pink-500 blur-md" />
-          <span className="absolute inset-0 rounded-full bg-gradient-to-l from-blue-500 via-purple-500 to-pink-500 blur-xl" />
+          <span className="absolute inset-0 rounded-full bg-gradient-to-l from-primary via-chart-4 to-chart-1 blur-sm" />
+          <span className="absolute inset-0 rounded-full bg-gradient-to-l from-primary via-chart-4 to-chart-1 blur-md" />
+          <span className="absolute inset-0 rounded-full bg-gradient-to-l from-primary via-chart-4 to-chart-1 blur-xl" />
         </div>
 
         {/* Inner circle */}
-        <div className="absolute inset-2 rounded-full bg-card border-4 border-border dark:bg-neutral-900" />
+        <div className="absolute inset-2 rounded-full bg-card border-4 border-border" />
       </div>
     </div>
   );

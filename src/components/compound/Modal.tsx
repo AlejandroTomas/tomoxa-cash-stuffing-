@@ -92,13 +92,8 @@ export default function Modal({
                   <Button
                     onClick={onSubmit}
                     disabled={isDisabled}
-                    className={
-                      actionColor === "red"
-                        ? "bg-red-600 hover:bg-red-700 text-white"
-                        : actionColor === "green"
-                        ? "bg-green-600 hover:bg-green-700 text-white"
-                        : "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
-                    }
+                    variant={actionColor === "red" ? "destructive" : "default"}
+                    className={actionColor === "green" ? "bg-success text-success-foreground hover:bg-success/90" : undefined}
                   >
                     {onSubmitButtonText ?? "Guardar"}
                   </Button>

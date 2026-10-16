@@ -14,7 +14,7 @@ const LoaderSticks = ({ size = 50 }: Props) => {
     return (
       <span
         key={i}
-        className="absolute left-[0.4629em] bottom-0 w-[0.074em] h-[0.2777em] rounded-[0.0555em] bg-muted-foreground dark:bg-white"
+        className="absolute left-[0.4629em] bottom-0 w-[0.074em] h-[0.2777em] rounded-[0.0555em] bg-muted-foreground dark:bg-foreground"
         style={{
           transformOrigin: "center -0.2222em",
           transform: `rotate(${rotation}deg)`,

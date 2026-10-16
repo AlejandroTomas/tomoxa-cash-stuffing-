@@ -54,38 +54,20 @@ const DIALOG_ICONS = {
   question: AlertCircle,
 } as const;
 
+/** Color del icono por tipo, con los tokens de estado (se ven en ambos temas). */
 const getDialogStyles = (type: DialogType) => {
   switch (type) {
     case "info":
-      return {
-        iconColor: "text-blue-600 dark:text-blue-400",
-        bgColor: "bg-blue-100 dark:bg-blue-900/30",
-      };
+      return { iconColor: "text-info", bgColor: "bg-info/15" };
     case "warning":
-      return {
-        iconColor: "text-orange-600 dark:text-orange-400",
-        bgColor: "bg-orange-100 dark:bg-orange-900/30",
-      };
-    case "error":
-      return {
-        iconColor: "text-red-600 dark:text-red-400",
-        bgColor: "bg-red-100 dark:bg-red-900/30",
-      };
-    case "success":
-      return {
-        iconColor: "text-green-600 dark:text-green-400",
-        bgColor: "bg-green-100 dark:bg-green-900/30",
-      };
     case "question":
-      return {
-        iconColor: "text-orange-600 dark:text-orange-400",
-        bgColor: "bg-orange-100 dark:bg-orange-900/30",
-      };
+      return { iconColor: "text-warning", bgColor: "bg-warning/15" };
+    case "error":
+      return { iconColor: "text-destructive", bgColor: "bg-destructive/15" };
+    case "success":
+      return { iconColor: "text-success", bgColor: "bg-success/15" };
     default:
-      return {
-        iconColor: "text-gray-600 dark:text-gray-400",
-        bgColor: "bg-gray-100 dark:bg-gray-900/30",
-      };
+      return { iconColor: "text-muted-foreground", bgColor: "bg-muted" };
   }
 };
 
@@ -174,11 +156,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             {showConfirmButton && (
               <Button
                 onClick={handleConfirm}
-                className={`gap-2 ${
-                  confirmColorScheme === "primary"
-                    ? "bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-                    : ""
-                }`}
+                variant={confirmColorScheme === "destructive" ? "destructive" : "default"}
+                className="gap-2"
               >
                 <Check className="h-4 w-4" />
                 {confirmText}

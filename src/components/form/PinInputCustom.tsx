@@ -103,7 +103,7 @@ const PinInputCustom = ({
             inputMode="numeric"
             maxLength={1}
             value={pin}
-            className="w-12 h-14 text-center text-lg font-semibold border-2 border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-12 h-14 text-center text-lg font-semibold border-2 border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             onChange={(e) => handleChange(i, e)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             autoFocus={i === 0}
@@ -115,10 +115,10 @@ const PinInputCustom = ({
       <button
         onClick={handleTokenSubmit}
         disabled={loaderBtn}
-        className="min-w-[120px] px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white font-medium rounded-md flex items-center justify-center gap-2 transition-colors"
+        className="min-w-[120px] px-4 py-2 bg-success hover:bg-success/90 disabled:opacity-60 disabled:cursor-not-allowed text-success-foreground font-medium rounded-md flex items-center justify-center gap-2 transition-colors"
       >
         {loaderBtn ? (
-          <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+          <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
         ) : (
           <>
             ENVIAR <Send className="h-4 w-4" />

@@ -58,7 +58,7 @@ const AlertDialogComponent = ({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onCancel}>
-      <AlertDialogContent className="sm:max-w-lg bg-card dark:bg-neutral-900 rounded-lg shadow-lg z-[9999]">
+      <AlertDialogContent className="sm:max-w-lg bg-card rounded-lg shadow-lg z-[9999]">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-lg font-bold">
             {title}
@@ -80,11 +80,7 @@ const AlertDialogComponent = ({
             <AlertDialogAction asChild>
               <Button
                 onClick={onConfirm}
-                className={
-                  colorSchema === "red"
-                    ? "bg-red-600 hover:bg-red-700 text-white"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
-                }
+                variant={colorSchema === "red" ? "destructive" : "default"}
               >
                 {confirmText ?? "Borrar"}
               </Button>
@@ -95,7 +91,7 @@ const AlertDialogComponent = ({
         {applyProgress && (
           <div className="w-full h-2 bg-muted rounded mt-4 overflow-hidden">
             <div
-              className="h-full bg-orange-500 transition-all duration-100"
+              className="h-full bg-warning transition-all duration-100"
               style={{ width: `${progressValue}%` }}
             />
           </div>

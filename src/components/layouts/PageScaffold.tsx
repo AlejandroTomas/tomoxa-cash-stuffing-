@@ -27,7 +27,7 @@ const PageScaffold = ({
   return (
     <div
       className={cn(
-        "min-h-full overflow-x-hidden bg-linear-to-br from-blue-50 via-background to-green-50 dark:from-blue-950/20 dark:via-background dark:to-green-950/20",
+        "min-h-full overflow-x-hidden bg-linear-to-br from-primary/5 via-background to-chart-2/5",
         className,
       )}
       style={{
@@ -46,7 +46,7 @@ const PageScaffold = ({
               {icon && (
                 <div
                   className={cn(
-                    "h-10 w-10 rounded-lg bg-linear-to-br from-green-500 to-green-600 flex items-center justify-center",
+                    "h-10 w-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center",
                     iconWrapperClassName,
                   )}
                 >

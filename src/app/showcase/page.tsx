@@ -32,7 +32,7 @@ export default function ShowcasePage() {
       <PageScaffold
         title="Showcase"
         subtitle="Componentes y patrones incluidos en la plantilla"
-        icon={<LayoutGrid className="h-5 w-5 text-white" />}
+        icon={<LayoutGrid className="h-5 w-5" />}
       >
         <Tabs defaultValue="table" className="gap-4">
           <TabsList className="h-auto flex-wrap justify-start">
