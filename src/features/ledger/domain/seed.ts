@@ -116,3 +116,22 @@ export function seedMovements(): Movement[] {
     createdAt: `${draft.date}T12:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}.000Z`,
   }));
 }
+
+/** Cómo empezar el libro: de cero o con la historia de ejemplo. */
+export type StartMode = "empty" | "sample";
+
+/** De cero: solo los destinos internos para ingresos y reserva de tarjeta. */
+export const EMPTY_ENVELOPES: Envelope[] = SEED_ENVELOPES.filter((envelope) => envelope.id === "available" || envelope.id === "card");
+
+/** Sin ingresos recurrentes de demostración. */
+export const EMPTY_SETTINGS: LedgerSettings = { ...DEFAULT_SETTINGS, recurringIncome: [] };
+
+/** Lo que se guarda al empezar. */
+export function startingData(mode: StartMode): { accounts: Account[]; envelopes: Envelope[]; movements: Movement[]; settings: LedgerSettings } {
+  return {
+    accounts: SEED_ACCOUNTS,
+    envelopes: mode === "sample" ? SEED_ENVELOPES : EMPTY_ENVELOPES,
+    movements: mode === "sample" ? seedMovements() : [],
+    settings: mode === "sample" ? DEFAULT_SETTINGS : EMPTY_SETTINGS,
+  };
+}

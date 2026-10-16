@@ -9,7 +9,7 @@ import { useAppDispatch, useAppSelector } from "@/hooks/useReduxHooks";
 import { toLocalIsoDate } from "@/utils/localDate";
 import { documentsFromLedger, summarizeActivity } from "../domain/document";
 import { toneFor, type EnvelopeStyle } from "../domain/envelopeStyle";
-import { toEnvelopeItem, type EnvelopeId, type EnvelopeItem } from "../domain/envelopeView";
+import { toEnvelopeItem, visibleEnvelopes, type EnvelopeId, type EnvelopeItem } from "../domain/envelopeView";
 
 /**
  * El libro (feature `ledger`) visto por el organizador: sobres activos con su
@@ -33,8 +33,9 @@ export function useLedgerData() {
   }, [dispatch, loaded]);
 
   const envelopes: EnvelopeItem[] = useMemo(
-    () => activeEnvelopes.map((envelope) => toEnvelopeItem(envelope, balances.envelopes[envelope.id] ?? 0)),
-    [activeEnvelopes, balances],
+    () => visibleEnvelopes(activeEnvelopes, allEnvelopes, movements, balances.envelopes)
+      .map((envelope) => toEnvelopeItem(envelope, balances.envelopes[envelope.id] ?? 0)),
+    [activeEnvelopes, allEnvelopes, balances, movements],
   );
 
   /** Saldo (centavos) de cada sobre activo. */

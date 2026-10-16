@@ -48,12 +48,12 @@ describe("parseBackup", () => {
 describe("respaldo en el servicio", () => {
   it("exportar → restablecer → importar deja el libro igual", async () => {
     const service = setup();
-    await service.load();
+    await service.start("sample");
     await service.record({ kind: "expense", date: "2026-10-16", concept: "Súper", amountMinor: 12000, accountId: "debit", envelopeId: "week" });
     const backup = await service.exportBackup();
     expect(backup).toMatchObject({ app: "aurora-ledger", version: 1, exportedAt: "2026-10-16T18:00:00.000Z" });
 
-    const reset = await service.resetToSample();
+    const reset = await service.start("sample");
     expect(reset.movements).toHaveLength(seedMovements().length);
 
     const imported = await service.importBackup(JSON.stringify(backup));
@@ -63,7 +63,7 @@ describe("respaldo en el servicio", () => {
 
   it("un respaldo inválido no toca lo guardado", async () => {
     const service = setup();
-    await service.load();
+    await service.start("sample");
     await service.record({ kind: "expense", date: "2026-10-16", concept: "Súper", amountMinor: 12000, accountId: "debit", envelopeId: "week" });
     await expect(service.importBackup("{}")).rejects.toMatchObject({ code: "INVALID_BACKUP" });
     expect((await service.load()).movements).toHaveLength(seedMovements().length + 1);

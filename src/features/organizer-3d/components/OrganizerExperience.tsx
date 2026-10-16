@@ -31,6 +31,7 @@ import { handwriting } from "./fonts";
 import { OrganizerBackdrop } from "./OrganizerBackdrop";
 import { OrganizerNav } from "./OrganizerNav";
 import { useOrganizerController } from "./useOrganizerController";
+import { WelcomeDialog } from "./WelcomeDialog";
 
 const OrganizerCanvas = dynamic(() => import("./OrganizerCanvas"), {
   ssr: false,
@@ -300,6 +301,7 @@ export function OrganizerExperience() {
           onConfirm={(draft) => void onTransfer(draft)}
         />
       )}
+      <WelcomeDialog />
       <RecordMovementDialog open={dialog === "record"} onOpenChange={(open) => setDialog(open ? "record" : null)} defaults={recordDefaults} onRecorded={(movement) => void animateMovement(movement)} />
       <AccountsSheet
         open={dialog === "accounts"}

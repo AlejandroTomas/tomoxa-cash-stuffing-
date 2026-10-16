@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 
 import { computeBalances } from "../domain/balances";
-import { SEED_ENVELOPES, seedMovements } from "../domain/seed";
+import { EMPTY_ENVELOPES, SEED_ENVELOPES, seedMovements } from "../domain/seed";
 import { LedgerRuleError } from "../errors/ledger-errors";
 import { LedgerDatabase } from "../repositories/ledgerDatabase";
 import { createLedgerRepository } from "../repositories/ledger.repository";
@@ -17,25 +17,40 @@ function setup() {
 }
 
 describe("ledgerService", () => {
-  it("la primera vez siembra; después solo lee", async () => {
+  it("la primera vez no hay libro: no se siembra solo", async () => {
+    const { service } = setup();
+    expect(await service.open()).toBeNull();
+  });
+
+  it("empezar con el ejemplo guarda su historia; después solo lee", async () => {
     const { service, repository } = setup();
-    const first = await service.load();
+    const first = await service.start("sample");
     expect(first.movements).toHaveLength(seedMovements().length);
     await repository.addMovement({ ...seedMovements()[0], id: "extra", createdAt: "2026-10-15T00:00:00.000Z" });
-    const second = await service.load();
-    expect(second.movements).toHaveLength(seedMovements().length + 1);
+    expect((await service.open())?.movements).toHaveLength(seedMovements().length + 1);
+  });
+
+  it("empezar de cero quita los sobres, ingresos y movimientos de ejemplo", async () => {
+    const { service } = setup();
+    await service.start("sample");
+    const empty = await service.start("empty");
+    expect(empty.movements).toEqual([]);
+    expect(empty.envelopes.map((envelope) => envelope.id)).toEqual(EMPTY_ENVELOPES.map((envelope) => envelope.id));
+    expect(empty.envelopes.every((envelope) => !envelope.budget)).toBe(true);
+    expect(empty.settings?.recurringIncome).toEqual([]);
+    expect(Object.values(computeBalances(empty).envelopes).every((amount) => amount === 0)).toBe(true);
   });
 
   it("registra un gasto con tarjeta y completa su sobre de reserva", async () => {
     const { service } = setup();
-    await service.load();
+    await service.start("sample");
     const movement = await service.record({ kind: "expense", date: "2026-10-15", concept: "  Súper ", amountMinor: 50000, accountId: "visa", envelopeId: "week" });
     expect(movement).toMatchObject({ id: "new-1", concept: "Súper", reserveEnvelopeId: "card", createdAt: "2026-10-15T18:00:00.000Z" });
   });
 
   it("rechaza con un error tipado y su campo", async () => {
     const { service } = setup();
-    await service.load();
+    await service.start("sample");
     const attempt = service.record({ kind: "assignment", date: "2026-10-15", concept: "Mover", amountMinor: 99999999, envelopeId: "week", toEnvelopeId: "savings" });
     await expect(attempt).rejects.toBeInstanceOf(LedgerRuleError);
     await expect(attempt).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS", fieldErrors: { amountMinor: expect.any(String) } });
@@ -43,7 +58,7 @@ describe("ledgerService", () => {
 
   it("cancela un movimiento una sola vez", async () => {
     const { service } = setup();
-    await service.load();
+    await service.start("sample");
     const moved = await service.record({ kind: "assignment", date: "2026-10-15", concept: "Mover", amountMinor: 10000, envelopeId: "available", toEnvelopeId: "savings" });
     const reversal = await service.cancel(moved.id, "2026-10-15");
     expect(reversal).toMatchObject({ kind: "reversal", reversalOf: moved.id, concept: "Cancelación: Mover" });
@@ -52,7 +67,7 @@ describe("ledgerService", () => {
 
   it("crea un sobre al final, rechaza nombres repetidos y solo archiva sobres vacíos", async () => {
     const { service } = setup();
-    const { envelopes } = await service.load();
+    const { envelopes } = await service.start("sample");
     const trip = await service.saveEnvelope({ id: "trip", name: " Viajes ", description: "", color: "#6fbcc6", icon: "piggy", order: 0, archived: false });
     expect(trip).toMatchObject({ name: "Viajes", order: envelopes.length, archived: false });
     await expect(service.saveEnvelope({ ...SEED_ENVELOPES[2], id: "dup", name: "ahorro" })).rejects.toMatchObject({ code: "NAME_TAKEN" });
@@ -64,7 +79,7 @@ describe("ledgerService", () => {
 
   it("caben 8 sobres activos; para crear otro hay que archivar uno", async () => {
     const { service } = setup();
-    await service.load(); // 6 sobres
+    await service.start("sample"); // 6 sobres
     const make = (id: string) => service.saveEnvelope({ id, name: id, description: "", color: "#6fbcc6", icon: "wallet", order: 0, archived: false });
     await make("seven");
     await make("eight");
@@ -75,7 +90,7 @@ describe("ledgerService", () => {
 
   it("los saldos se recalculan con lo guardado (sobreviven a recargar)", async () => {
     const { service } = setup();
-    await service.load();
+    await service.start("sample");
     await service.record({ kind: "assignment", date: "2026-10-15", concept: "Mover", amountMinor: 10000, envelopeId: "available", toEnvelopeId: "savings" });
     const reloaded = await service.load();
     const before = computeBalances({ ...reloaded, movements: seedMovements() });
@@ -85,7 +100,7 @@ describe("ledgerService", () => {
 
   it("guarda ajustes de tarjeta e ingresos validados", async () => {
     const { service } = setup();
-    const { settings } = await service.load();
+    const { settings } = await service.start("sample");
     expect(await service.saveCardSettings("visa", { cutoffDay: 31, paymentDays: 18 })).toMatchObject({ card: { cutoffDay: 31, paymentDays: 18, reserveEnvelopeId: "card" } });
     await expect(service.saveCardSettings("visa", { cutoffDay: 40, paymentDays: 18 })).rejects.toMatchObject({ fieldErrors: { cutoffDay: expect.any(String) } });
     await expect(service.saveSettings({ ...settings!, recurringIncome: [{ id: "x", label: "Bono", weekday: 3, accountId: "visa" }] })).rejects.toBeInstanceOf(LedgerRuleError);

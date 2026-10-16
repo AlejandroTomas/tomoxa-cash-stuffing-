@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { AlertTriangle, Banknote, CreditCard, Download, Landmark, Plus, RotateCcw, Trash2, Undo2, Upload } from "lucide-react";
+import { AlertTriangle, Banknote, CreditCard, Download, Eraser, Landmark, Plus, RotateCcw, Trash2, Undo2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { backupFileName } from "../domain/backup";
 import { paymentDueSoon, type CardSummary } from "../domain/cards";
 import { formatMinor } from "../domain/money";
 import type { Account, Movement } from "../domain/types";
-import { cancelMovement, exportLedger, importLedger, resetLedger, saveCardSettings, saveLedgerSettings } from "../ledgerSlice";
+import { cancelMovement, exportLedger, importLedger, saveCardSettings, saveLedgerSettings, startLedger } from "../ledgerSlice";
 import { selectAccounts, selectActiveEnvelopes, selectBalances, selectBudgets, selectCardSummaries, selectEnvelopes, selectLedgerHealth, selectLedgerSettings, selectMovements } from "../selector";
 import { dueText, formatDay, MOVEMENT_LABELS, WEEKDAYS } from "./format";
 
@@ -505,7 +505,7 @@ function RecentMovements({ onCancelMovement }: Pick<AccountsSheetProps, "onCance
   );
 }
 
-/** Descargar el libro, reemplazarlo con un respaldo o volver a los datos de ejemplo. */
+/** Descargar el libro, reemplazarlo con un respaldo, empezar de cero o volver a los datos de ejemplo. */
 function BackupSection({ onBeforeReplace }: Pick<AccountsSheetProps, "onBeforeReplace">) {
   const dispatch = useAppDispatch();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -582,10 +582,27 @@ function BackupSection({ onBeforeReplace }: Pick<AccountsSheetProps, "onBeforeRe
           className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
           onClick={() =>
             replaceWith(
+              "¿Empezar de cero?",
+              "Se borran tus sobres, movimientos e ingresos recurrentes de este dispositivo. Solo queda Disponible en $0; las cuentas quedan en $0. No se puede deshacer (salvo con un respaldo).",
+              "Empezar de cero",
+              () => dispatch(startLedger("empty")).unwrap(),
+              "Empezaste de cero. Registra tu primer ingreso en Disponible.",
+            )
+          }
+        >
+          <Eraser /> Empezar de cero
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={() =>
+            replaceWith(
               "¿Restablecer los datos de ejemplo?",
               "Se borran tus sobres, cuentas y movimientos de este dispositivo y vuelven los de ejemplo. No se puede deshacer (salvo con un respaldo).",
               "Restablecer",
-              () => dispatch(resetLedger()).unwrap(),
+              () => dispatch(startLedger("sample")).unwrap(),
               "Volviste a los datos de ejemplo.",
             )
           }

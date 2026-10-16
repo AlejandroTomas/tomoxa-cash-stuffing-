@@ -7,6 +7,8 @@ import { cardSummaries } from "./domain/cards";
 
 /** Lectores del libro. Todo lo derivado (saldos) se calcula en `domain/`, memorizado. */
 export const selectLedgerLoaded = (state: RootState) => state.ledger.loaded;
+/** Primera vez: hay que elegir cómo empezar el libro. */
+export const selectLedgerNeedsStart = (state: RootState) => state.ledger.needsStart;
 export const selectAccounts = (state: RootState) => state.ledger.accounts;
 export const selectEnvelopes = (state: RootState) => state.ledger.envelopes;
 export const selectMovements = (state: RootState) => state.ledger.movements;

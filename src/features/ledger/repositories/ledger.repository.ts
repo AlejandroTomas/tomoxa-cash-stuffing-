@@ -13,7 +13,7 @@ export interface LedgerData {
  * Acceso al libro en el dispositivo. Solo lectura y escritura: las reglas
  * viven en el servicio. Los movimientos solo se agregan (nunca se editan ni
  * se borran); corregir es agregar una cancelación. `replaceAll` es la única
- * excepción: importar un respaldo o restablecer los datos de ejemplo.
+ * excepción: empezar (de cero o con el ejemplo) o importar un respaldo.
  */
 export function createLedgerRepository(database: () => LedgerDatabase = ledgerDatabase) {
   return {
@@ -29,23 +29,12 @@ export function createLedgerRepository(database: () => LedgerDatabase = ledgerDa
       return { accounts, envelopes, movements, settings: (settings?.value as LedgerSettings | undefined) ?? null };
     },
 
-    async isSeeded(): Promise<boolean> {
+    /** ¿Ya se empezó el libro en este dispositivo? (La marca se llama `seededAt` por compatibilidad.) */
+    async isStarted(): Promise<boolean> {
       return Boolean(await database().meta.get("seededAt"));
     },
 
-    /** Guarda los datos iniciales de una sola vez (todo o nada). */
-    async seed(data: Omit<LedgerData, "settings"> & { settings: LedgerSettings }, at: string): Promise<void> {
-      const db = database();
-      await db.transaction("rw", [db.accounts, db.envelopes, db.movements, db.meta], async () => {
-        await db.accounts.bulkPut(data.accounts);
-        await db.envelopes.bulkPut(data.envelopes);
-        await db.movements.bulkPut(data.movements);
-        await db.meta.put({ key: "settings", value: data.settings });
-        await db.meta.put({ key: "seededAt", value: at });
-      });
-    },
-
-    /** Reemplaza todo el libro (importar o restablecer). Todo o nada. */
+    /** Reemplaza todo el libro (empezar, importar o restablecer). Todo o nada. */
     async replaceAll(data: Omit<LedgerData, "settings"> & { settings: LedgerSettings }, at: string): Promise<void> {
       const db = database();
       await db.transaction("rw", [db.accounts, db.envelopes, db.movements, db.meta], async () => {

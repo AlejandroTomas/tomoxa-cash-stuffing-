@@ -1,4 +1,4 @@
-import type { Envelope, EnvelopeBudget, EnvelopeIcon } from "@/features/ledger/domain/types";
+import type { Envelope, EnvelopeBudget, EnvelopeIcon, Movement } from "@/features/ledger/domain/types";
 import { toneFor } from "./envelopeStyle";
 
 export type { EnvelopeIcon };
@@ -30,6 +30,19 @@ export function toEnvelopeItem(envelope: Envelope, balanceMinor: number): Envelo
     amount: balanceMinor / 100,
     ...(envelope.budget ? { budget: envelope.budget } : {}),
   };
+}
+
+/** En el inicio de cero, la reserva interna de tarjeta se muestra al usarla. */
+export function visibleEnvelopes(
+  active: readonly Envelope[],
+  all: readonly Envelope[],
+  movements: readonly Movement[],
+  balances: Readonly<Record<string, number>>,
+): Envelope[] {
+  const minimalBook = !all.some((envelope) => ["savings", "cash", "week", "fund"].includes(envelope.id));
+  if (!minimalBook) return [...active];
+  const cardUsed = movements.some((movement) => movement.accountId === "visa" || movement.toAccountId === "visa" || movement.reserveEnvelopeId === "card");
+  return active.filter((envelope) => envelope.id !== "card" || cardUsed || (balances.card ?? 0) !== 0);
 }
 
 /** Sobre vecino en la lista (circular). Sin sobre activo, `1` da el primero y `-1` el último. */

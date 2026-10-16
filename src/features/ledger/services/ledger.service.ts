@@ -2,7 +2,7 @@ import { createBackup, parseBackup, type LedgerBackup } from "../domain/backup";
 import { computeBalances } from "../domain/balances";
 import { checkCardSettings, checkSettings } from "../domain/cards";
 import { checkArchive, checkEnvelope } from "../domain/envelopes";
-import { DEFAULT_SETTINGS, SEED_ACCOUNTS, SEED_ENVELOPES, seedMovements } from "../domain/seed";
+import { DEFAULT_SETTINGS, startingData, type StartMode } from "../domain/seed";
 import type { Account, CardSettings, Envelope, LedgerSettings, Movement } from "../domain/types";
 import { checkMovement, type MovementDraft } from "../domain/validation";
 import { LedgerRuleError } from "../errors/ledger-errors";
@@ -20,13 +20,22 @@ interface ServiceDeps {
  */
 export function createLedgerService({ repository, now, newId }: ServiceDeps) {
   return {
-    /** Abre el libro; la primera vez siembra los datos de ejemplo. */
+    /** Abre el libro guardado; `null` si nunca se empezó (la interfaz pregunta cómo empezar). */
+    async open(): Promise<LedgerData | null> {
+      if (!(await repository.isStarted())) return null;
+      return this.load();
+    },
+
+    /** Lee lo guardado. */
     async load(): Promise<LedgerData> {
-      if (!(await repository.isSeeded())) {
-        await repository.seed({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: seedMovements(), settings: DEFAULT_SETTINGS }, now().toISOString());
-      }
       const data = await repository.loadAll();
       return { ...data, settings: data.settings ?? DEFAULT_SETTINGS };
+    },
+
+    /** Empieza (o vuelve a empezar) de cero o con los datos de ejemplo. Reemplaza lo que hubiera. */
+    async start(mode: StartMode): Promise<LedgerData> {
+      await repository.replaceAll(startingData(mode), now().toISOString());
+      return this.load();
     },
 
     /** Todo el libro como respaldo (para descargar). */
@@ -40,12 +49,6 @@ export function createLedgerService({ repository, now, newId }: ServiceDeps) {
       const result = parseBackup(text);
       if ("message" in result) throw new LedgerRuleError({ code: "INVALID_BACKUP", field: "form", message: result.message });
       await repository.replaceAll(result.contents, now().toISOString());
-      return this.load();
-    },
-
-    /** Borra todo y vuelve a los datos de ejemplo. */
-    async resetToSample(): Promise<LedgerData> {
-      await repository.replaceAll({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: seedMovements(), settings: DEFAULT_SETTINGS }, now().toISOString());
       return this.load();
     },
 

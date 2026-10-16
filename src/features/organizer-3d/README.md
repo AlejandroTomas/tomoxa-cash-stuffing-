@@ -1,5 +1,9 @@
 # organizer-3d — Ahorroxa
 
+Al abrir la app por primera vez, `WelcomeDialog` pide elegir entre empezar de
+cero, datos de ejemplo o importar un respaldo. Al empezar de cero solo se muestra
+`Disponible`; la reserva de tarjeta aparece al usarla.
+
 Página de inicio (`/`; `/organizer` redirige ahí): un organizador 3D con sobres
 extraíbles (hasta 8) y una interfaz de vidrio encima. Tres estilos, con los mismos
 sobres y datos: **carpeta** de cuero con sobres plásticos, **cajonera** de cajones

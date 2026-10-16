@@ -44,11 +44,11 @@ describe("repositorio (IndexedDB)", () => {
     return { db, repo: createLedgerRepository(() => db) };
   };
 
-  it("siembra una vez y lee todo en orden", async () => {
+  it("guarda el libro de una vez, queda empezado y lee todo en orden", async () => {
     const { repo } = fresh();
-    expect(await repo.isSeeded()).toBe(false);
-    await repo.seed({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: seedMovements(), settings: DEFAULT_SETTINGS }, "2026-10-15T10:00:00.000Z");
-    expect(await repo.isSeeded()).toBe(true);
+    expect(await repo.isStarted()).toBe(false);
+    await repo.replaceAll({ accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: seedMovements(), settings: DEFAULT_SETTINGS }, "2026-10-15T10:00:00.000Z");
+    expect(await repo.isStarted()).toBe(true);
     const data = await repo.loadAll();
     expect(data.accounts).toHaveLength(SEED_ACCOUNTS.length);
     expect(data.envelopes.map((e) => e.id)).toEqual(SEED_ENVELOPES.map((e) => e.id));
