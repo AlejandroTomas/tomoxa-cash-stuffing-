@@ -1,0 +1,58 @@
+import { createSlice } from "@reduxjs/toolkit";
+
+import { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope, saveLedgerSettings } from "./actions/ledger.actions";
+import { DEFAULT_SETTINGS } from "./domain/seed";
+import type { Account, Envelope, LedgerSettings, Movement } from "./domain/types";
+
+/**
+ * El libro en memoria (copia de lo guardado en el dispositivo). Solo datos:
+ * los saldos se derivan en `selector.ts`; carga y errores viven en loadingSlice.
+ */
+interface LedgerState {
+  loaded: boolean;
+  accounts: Account[];
+  envelopes: Envelope[];
+  movements: Movement[];
+  settings: LedgerSettings;
+}
+
+const initialState: LedgerState = { loaded: false, accounts: [], envelopes: [], movements: [], settings: DEFAULT_SETTINGS };
+
+const upsert = (items: Envelope[], envelope: Envelope) =>
+  items.some((item) => item.id === envelope.id) ? items.map((item) => (item.id === envelope.id ? envelope : item)) : [...items, envelope];
+
+const ledgerSlice = createSlice({
+  name: "ledger",
+  initialState,
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(loadLedger.fulfilled, (state, { payload }) => {
+        state.loaded = true;
+        state.accounts = payload.accounts;
+        state.envelopes = payload.envelopes;
+        state.movements = payload.movements;
+        state.settings = payload.settings ?? DEFAULT_SETTINGS;
+      })
+      .addCase(recordMovement.fulfilled, (state, { payload }) => {
+        state.movements.push(payload);
+      })
+      .addCase(cancelMovement.fulfilled, (state, { payload }) => {
+        state.movements.push(payload);
+      })
+      .addCase(saveEnvelope.fulfilled, (state, { payload }) => {
+        state.envelopes = upsert(state.envelopes, payload);
+      })
+      .addCase(archiveEnvelope.fulfilled, (state, { payload }) => {
+        state.envelopes = upsert(state.envelopes, payload);
+      })
+      .addCase(saveLedgerSettings.fulfilled, (state, { payload }) => {
+        state.settings = payload;
+      });
+  },
+});
+
+export default ledgerSlice.reducer;
+
+// Los thunks se reexportan desde el slice: es la API pública del feature.
+export { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope, saveLedgerSettings };

@@ -1,0 +1,12 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`datos iniciales termina con saldos sanos: ningún sobre sobregirado, deuda respaldada 1`] = `
+{
+  "available": 961200,
+  "card": 204540,
+  "cash": 256100,
+  "fund": 300000,
+  "savings": 252000,
+  "week": 271120,
+}
+`;

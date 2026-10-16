@@ -9,6 +9,7 @@ import { reducers } from "./reducers";
 const MODULE_TITLES: Record<string, string> = {
   // orders: "Pedidos",
   exampleTasks: "Tareas (ejemplo)", // bórralo junto con features/_example
+  ledger: "Sobres",
 };
 
 const notifyOnRejected = createNotifyOnRejected({

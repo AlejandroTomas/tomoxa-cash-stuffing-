@@ -2,6 +2,7 @@ import { combineReducers } from "@reduxjs/toolkit";
 import { createReducer } from "async-selector-kit";
 
 import exampleTasksReducer from "@/features/_example/exampleTasksSlice";
+import ledgerReducer from "@/features/ledger/ledgerSlice";
 import loadingReducer from "./loadingSlice";
 
 /**
@@ -16,6 +17,8 @@ export const reducers = combineReducers({
   AsyncSelector: createReducer(),
   /** Feature de ejemplo: bórralo junto con `features/_example`. */
   exampleTasks: exampleTasksReducer,
+  /** Libro de movimientos (organizador de sobres). */
+  ledger: ledgerReducer,
 });
 
 export type RootState = ReturnType<typeof reducers>;
