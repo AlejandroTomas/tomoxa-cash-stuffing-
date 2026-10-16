@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { archiveEnvelope, cancelMovement, loadLedger, recordMovement, saveEnvelope } from "@/features/ledger/ledgerSlice";
 import { selectAccounts, selectActiveEnvelopes, selectBalances, selectEnvelopes, selectLedgerLoaded, selectMovements } from "@/features/ledger/selector";
 import { checkMovement, type MovementDraft } from "@/features/ledger/domain/validation";
-import type { Envelope } from "@/features/ledger/domain/types";
+import type { Envelope, Movement } from "@/features/ledger/domain/types";
 import { useAppDispatch, useAppSelector } from "@/hooks/useReduxHooks";
 import { toLocalIsoDate } from "@/utils/localDate";
 import { documentsFromLedger, summarizeActivity } from "../domain/document";
@@ -70,8 +70,15 @@ export function useLedgerData() {
 
   const archive = useCallback((id: EnvelopeId) => dispatch(archiveEnvelope(id)).unwrap(), [dispatch]);
 
-  /** Cancela un movimiento (registra su inverso con fecha de hoy). */
-  const cancel = useCallback((movementId: string) => dispatch(cancelMovement({ movementId, date: toLocalIsoDate(new Date()) })).unwrap(), [dispatch]);
+  /** Cancela un movimiento (registra su inverso con fecha de hoy) y devuelve el original. */
+  const cancel = useCallback(
+    async (movementId: string): Promise<Movement | undefined> => {
+      const original = movements.find((movement) => movement.id === movementId);
+      await dispatch(cancelMovement({ movementId, date: toLocalIsoDate(new Date()) })).unwrap();
+      return original;
+    },
+    [dispatch, movements],
+  );
 
   return { loaded, envelopes, balanceOf, documentsFor, activityFor, checkDraft, record, withStyle, saveStyle, createEnvelope, archive, cancel };
 }

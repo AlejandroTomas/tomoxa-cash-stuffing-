@@ -25,7 +25,8 @@ export interface MoneyFlow {
  * Lo que se anima al registrar un movimiento: el ingreso entra a su sobre, el
  * gasto sale; con tarjeta el dinero pasa del sobre al de reserva (sigue en el
  * banco, ahora apartado) y el pago de tarjeta sale de la reserva. Lo que no
- * mueve sobres (depósito/retiro, cancelación) no se anima.
+ * mueve sobres (depósito/retiro) no se anima; la cancelación se anima con
+ * `reversalFlowOf` del original.
  */
 export function moneyFlowOf(movement: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId">): MoneyFlow | null {
   const flow = (from: string | undefined | null, to: string | undefined | null): MoneyFlow | null =>
@@ -42,4 +43,10 @@ export function moneyFlowOf(movement: Pick<Movement, "kind" | "envelopeId" | "to
     default:
       return null;
   }
+}
+
+/** Al cancelar un movimiento el dinero hace el camino inverso del original. */
+export function reversalFlowOf(original: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId">): MoneyFlow | null {
+  const flow = moneyFlowOf(original);
+  return flow && { from: flow.to, to: flow.from };
 }

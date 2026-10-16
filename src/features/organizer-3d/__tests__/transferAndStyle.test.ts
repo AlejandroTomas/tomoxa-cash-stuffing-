@@ -1,6 +1,6 @@
 import { envelopeStyleSchema, toneFor } from "../domain/envelopeStyle";
 import { parseAmountMinor } from "@/features/ledger/domain/money";
-import { moneyFlowOf, transferFormSchema } from "../domain/transfer";
+import { moneyFlowOf, reversalFlowOf, transferFormSchema } from "../domain/transfer";
 
 
 describe("parseAmountMinor", () => {
@@ -65,5 +65,17 @@ describe("moneyFlowOf", () => {
     expect(moneyFlowOf({ kind: "reversal" })).toBeNull();
     // Gastar con tarjeta desde su propio sobre de reserva: entra y sale lo mismo.
     expect(moneyFlowOf({ kind: "expense", envelopeId: "card", reserveEnvelopeId: "card" })).toBeNull();
+  });
+});
+
+describe("reversalFlowOf", () => {
+  it("cancelar hace el camino inverso del original", () => {
+    expect(reversalFlowOf({ kind: "income", envelopeId: "available" })).toEqual({ from: "available", to: null });
+    expect(reversalFlowOf({ kind: "expense", envelopeId: "week", reserveEnvelopeId: "card" })).toEqual({ from: "card", to: "week" });
+    expect(reversalFlowOf({ kind: "cardPayment", reserveEnvelopeId: "card" })).toEqual({ from: null, to: "card" });
+    expect(reversalFlowOf({ kind: "assignment", envelopeId: "available", toEnvelopeId: "savings" })).toEqual({ from: "savings", to: "available" });
+  });
+  it("si el original no movía sobres, tampoco su cancelación", () => {
+    expect(reversalFlowOf({ kind: "accountTransfer" })).toBeNull();
   });
 });

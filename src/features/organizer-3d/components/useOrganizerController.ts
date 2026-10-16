@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportError } from "@/core/logger";
 import type { Movement } from "@/features/ledger/domain/types";
 import type { MovementDraft } from "@/features/ledger/domain/validation";
-import { moneyFlowOf } from "../domain/transfer";
+import { moneyFlowOf, reversalFlowOf, type MoneyFlow } from "../domain/transfer";
 import { describeFilter, EMPTY_FILTER, filterDocuments, type DocumentFilter } from "../domain/documentFilter";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import { neighborEnvelope, type EnvelopeId } from "../domain/envelopeView";
@@ -168,27 +168,6 @@ export function useOrganizerController() {
     void perform({ type: "OPEN_ENVELOPE" });
   }, [documents, perform]);
 
-  /** Cancela un movimiento. Si el sobre estaba abierto, lo cierra, cancela y lo vuelve a abrir. */
-  const cancelMovement = useCallback(
-    async (movementId: string): Promise<boolean> => {
-      if (busyRef.current) return false;
-      const wasOpen = viewRef.current.stage === "browsing" || viewRef.current.stage === "reading";
-      await closeDocuments();
-      // Se marca antes: los documentos cambian en cuanto el libro se actualiza, antes de que termine la promesa.
-      reopenRef.current = wasOpen;
-      try {
-        await cancel(movementId);
-      } catch (error) {
-        reopenRef.current = false;
-        // El error del thunk ya se mostró en las alertas.
-        reportError(error, { context: "organizer3d.cancelMovement" });
-        return false;
-      }
-      return true;
-    },
-    [closeDocuments, cancel],
-  );
-
   /** Ejecuta `task` con la interfaz bloqueada (animaciones + guardado). */
   const runBusy = useCallback(async <T,>(context: string, task: () => Promise<T>): Promise<T | null> => {
     busyRef.current = true;
@@ -224,17 +203,45 @@ export function useOrganizerController() {
   );
 
   /**
-   * Anima un movimiento ya registrado (ingreso, gasto, pago de tarjeta). Solo
-   * con la carpeta abierta y sin un sobre fuera: si no, no hace falta mostrarlo.
+   * Anima las fichas de un movimiento ya guardado. Solo con la carpeta abierta y
+   * sin un sobre fuera: si no, no hace falta mostrarlo.
    */
-  const animateMovement = useCallback(
-    async (movement: Movement) => {
-      const flow = moneyFlowOf(movement);
+  const animateFlow = useCallback(
+    async (flow: MoneyFlow | null) => {
       const { stage } = viewRef.current;
       if (!flow || busyRef.current || (stage !== "open" && stage !== "focused")) return;
       await runBusy("organizer3d.animateMovement", async () => sceneRef.current?.transfer(flow.from, flow.to));
     },
     [runBusy],
+  );
+
+  /** Anima un movimiento recién registrado (ingreso, gasto, pago de tarjeta). */
+  const animateMovement = useCallback((movement: Movement) => animateFlow(moneyFlowOf(movement)), [animateFlow]);
+
+  /**
+   * Cancela un movimiento. Si el sobre estaba abierto, lo cierra, cancela y lo
+   * vuelve a abrir; si no, las fichas hacen el camino inverso del original.
+   */
+  const cancelMovement = useCallback(
+    async (movementId: string): Promise<boolean> => {
+      if (busyRef.current) return false;
+      const wasOpen = viewRef.current.stage === "browsing" || viewRef.current.stage === "reading";
+      await closeDocuments();
+      // Se marca antes: los documentos cambian en cuanto el libro se actualiza, antes de que termine la promesa.
+      reopenRef.current = wasOpen;
+      let original: Movement | undefined;
+      try {
+        original = await cancel(movementId);
+      } catch (error) {
+        reopenRef.current = false;
+        // El error del thunk ya se mostró en las alertas.
+        reportError(error, { context: "organizer3d.cancelMovement" });
+        return false;
+      }
+      if (original && !wasOpen) await animateFlow(reversalFlowOf(original));
+      return true;
+    },
+    [closeDocuments, cancel, animateFlow],
   );
 
   /** Vista previa en vivo del estilo en la carpeta; `null` vuelve al estilo guardado. */

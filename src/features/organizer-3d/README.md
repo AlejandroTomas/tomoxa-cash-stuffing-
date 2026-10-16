@@ -89,7 +89,9 @@ Al registrar un movimiento (botón "Registrar") las fichas también se animan, s
 `moneyFlowOf`: el ingreso llega de fuera a su sobre, el gasto sale, la compra con
 tarjeta pasa del sobre a la reserva y el pago de tarjeta sale de la reserva
 (`transfer(from, to)` de la escena, con `null` = fuera). Solo con la carpeta abierta
-y sin un sobre fuera; depósito/retiro no se anima (no cambia sobres).
+y sin un sobre fuera; depósito/retiro no se anima (no cambia sobres). Al cancelar
+un movimiento las fichas hacen el camino inverso (`reversalFlowOf`); si se canceló
+desde los documentos de un sobre abierto, el sobre se cierra y se reabre sin animar.
 
 ## Gestos (táctil y mouse)
 
