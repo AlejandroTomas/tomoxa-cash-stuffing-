@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportError } from "@/core/logger";
+import type { Movement } from "@/features/ledger/domain/types";
 import type { MovementDraft } from "@/features/ledger/domain/validation";
+import { moneyFlowOf } from "../domain/transfer";
 import { describeFilter, EMPTY_FILTER, filterDocuments, type DocumentFilter } from "../domain/documentFilter";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import { neighborEnvelope, type EnvelopeId } from "../domain/envelopeView";
@@ -221,6 +223,20 @@ export function useOrganizerController() {
     [ledger, runBusy, settleBinder],
   );
 
+  /**
+   * Anima un movimiento ya registrado (ingreso, gasto, pago de tarjeta). Solo
+   * con la carpeta abierta y sin un sobre fuera: si no, no hace falta mostrarlo.
+   */
+  const animateMovement = useCallback(
+    async (movement: Movement) => {
+      const flow = moneyFlowOf(movement);
+      const { stage } = viewRef.current;
+      if (!flow || busyRef.current || (stage !== "open" && stage !== "focused")) return;
+      await runBusy("organizer3d.animateMovement", async () => sceneRef.current?.transfer(flow.from, flow.to));
+    },
+    [runBusy],
+  );
+
   /** Vista previa en vivo del estilo en la carpeta; `null` vuelve al estilo guardado. */
   const previewStyle = useCallback(
     (id: EnvelopeId, style: EnvelopeStyle | null) => {
@@ -394,6 +410,7 @@ export function useOrganizerController() {
     activityFor: ledger.activityFor,
     checkDraft: ledger.checkDraft,
     moveMoney,
+    animateMovement,
     cancelMovement,
     closeDocuments,
     settleBinder,

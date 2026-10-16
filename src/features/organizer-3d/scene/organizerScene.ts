@@ -44,8 +44,11 @@ export interface OrganizerSceneApi {
   showDocuments: (visibleIds: readonly string[], caption: string) => void;
   pickDocument: (id: string) => Promise<void>;
   returnDocument: () => Promise<void>;
-  /** Fichas de dinero viajan de un sobre a otro (solo animación; los montos los cambia la interfaz). Con la carpeta abierta. */
-  transfer: (from: EnvelopeId, to: EnvelopeId) => Promise<void>;
+  /**
+   * Fichas de dinero viajan de un sobre a otro (solo animación; los montos los
+   * cambia la interfaz). `null` = fuera de la carpeta (ingreso o gasto). Con la carpeta abierta.
+   */
+  transfer: (from: EnvelopeId | null, to: EnvelopeId | null) => Promise<void>;
   /** Aplica nombre, color e icono a un sobre (vista previa en vivo y guardado). */
   restyleEnvelope: (item: EnvelopeItem) => void;
   /**
@@ -552,26 +555,38 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   let flyingTokens: MoneyTokens | null = null;
 
-  async function transfer(fromId: EnvelopeId, toId: EnvelopeId) {
-    const from = byId.get(fromId);
-    const to = byId.get(toId);
-    if (!from || !to || from === to || disposed || (stage !== "open" && stage !== "focused")) return;
+  /** Punto "fuera de la carpeta" cerca de un sobre: hacia la cámara, arriba a la derecha (de ahí llega o ahí se va el dinero). */
+  const outsideOf = (point: THREE.Vector3) => point.clone().add(new THREE.Vector3(2.4, 1.8, 3.6));
+
+  /**
+   * Fichas de dinero de un sobre a otro. `null` = fuera de la carpeta: un
+   * ingreso llega de fuera (`from` null) y un gasto se va (`to` null).
+   */
+  async function transfer(fromId: EnvelopeId | null, toId: EnvelopeId | null) {
+    const from = fromId ? byId.get(fromId) : undefined;
+    const to = toId ? byId.get(toId) : undefined;
+    if ((fromId && !from) || (toId && !to) || (!from && !to) || from === to || disposed || (stage !== "open" && stage !== "focused")) return;
     clearHover();
     const tokens = createMoneyTokens(3);
     flyingTokens = tokens;
     tokens.meshes.forEach((mesh) => scene.add(mesh));
     // Puntos del arco: sale de la boca del origen, sube hacia la cámara y cae en la boca del destino.
-    const start = mouthPoint(from, 0.45);
-    const end = mouthPoint(to, 0.5);
-    // Arco (en mundo) hacia la cámara y un poco arriba: las fichas pasan por delante de todos los sobres.
-    const control = start.clone().lerp(end, 0.5).add(new THREE.Vector3(0.7, 1.1, 2.6));
+    const end = to ? mouthPoint(to, 0.5) : outsideOf(mouthPoint(from!, 0.45));
+    const start = from ? mouthPoint(from, 0.45) : outsideOf(end);
+    // Entre sobres el arco pasa por delante de todos; desde/hacia fuera basta una curva suave.
+    const lift = from && to ? new THREE.Vector3(0.7, 1.1, 2.6) : new THREE.Vector3(0.4, 0.9, 0.6);
+    const control = start.clone().lerp(end, 0.5).add(lift);
     const flight = d(1.3);
     const stagger = d(0.14);
     const arrival = flight + stagger * (tokens.meshes.length - 1);
+    // Desde fuera las fichas aparecen creciendo; hacia fuera se encogen hasta desaparecer.
+    const fade = (t: number) => (from ? 1 : Math.min(1, t * 4)) * (to ? 1 : Math.min(1, (1 - t) * 4));
     await play((tl) => {
       // El origen abre la boca y se levanta un poco al soltar las fichas.
-      tl.to(from.mouth.rotation, { x: 0.7, duration: d(0.3), ease: "back.out(1.6)" }, 0);
-      tl.to(from.hover.position, { y: 0.12, duration: d(0.3), ease: "power2.out" }, 0);
+      if (from) {
+        tl.to(from.mouth.rotation, { x: 0.7, duration: d(0.3), ease: "back.out(1.6)" }, 0);
+        tl.to(from.hover.position, { y: 0.12, duration: d(0.3), ease: "power2.out" }, 0);
+      }
       tokens.meshes.forEach((mesh, i) => {
         const progress = { t: 0 };
         const point = new THREE.Vector3();
@@ -590,7 +605,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
             mesh.position.copy(point);
             // De cara a la cámara, con un giro suave en el aire.
             mesh.rotation.set(-0.15 + (1 - Math.sin(t * Math.PI)) * 0.5, Math.sin(t * Math.PI * 2) * 0.5 + i * 0.12, (t - 0.5) * 0.6 + i * 0.08);
-            mesh.scale.setScalar(0.75 + Math.sin(t * Math.PI) * 0.75);
+            mesh.scale.setScalar(Math.max(0.001, (0.75 + Math.sin(t * Math.PI) * 0.75) * fade(t)));
           },
         }, at);
         tl.call(() => {
@@ -598,12 +613,16 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
         }, [], at + flight);
       });
       // El origen se cierra; el destino abre la boca antes de recibir y "traga" al final.
-      tl.to(from.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, d(0.15) + arrival * 0.5);
-      tl.to(from.hover.position, { y: 0, duration: d(0.35), ease: "power2.inOut" }, d(0.15) + arrival * 0.5);
-      tl.to(to.mouth.rotation, { x: 0.75, duration: d(0.3), ease: "back.out(1.6)" }, d(0.15) + flight * 0.6);
-      tl.to(to.hover.position, { y: -0.06, duration: d(0.12), ease: "power2.in" }, d(0.15) + arrival);
-      tl.to(to.hover.position, { y: 0, duration: d(0.35), ease: "back.out(2)" }, d(0.27) + arrival);
-      tl.to(to.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, d(0.3) + arrival);
+      if (from) {
+        tl.to(from.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, d(0.15) + arrival * 0.5);
+        tl.to(from.hover.position, { y: 0, duration: d(0.35), ease: "power2.inOut" }, d(0.15) + arrival * 0.5);
+      }
+      if (to) {
+        tl.to(to.mouth.rotation, { x: 0.75, duration: d(0.3), ease: "back.out(1.6)" }, d(0.15) + flight * 0.6);
+        tl.to(to.hover.position, { y: -0.06, duration: d(0.12), ease: "power2.in" }, d(0.15) + arrival);
+        tl.to(to.hover.position, { y: 0, duration: d(0.35), ease: "back.out(2)" }, d(0.27) + arrival);
+        tl.to(to.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, d(0.3) + arrival);
+      }
       tl.call(() => {
         tokens.dispose();
         flyingTokens = null;

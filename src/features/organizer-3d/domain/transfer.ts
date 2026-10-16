@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Movement } from "@/features/ledger/domain/types";
 
 /**
  * Formulario "Mover dinero" (el monto llega como texto). Las reglas de saldo
@@ -13,3 +14,32 @@ export const transferFormSchema = z
   .refine((form) => form.from !== form.to, { path: ["to"], message: "Elige un sobre distinto al de origen." });
 
 export type TransferForm = z.infer<typeof transferFormSchema>;
+
+/** Por dónde viaja el dinero en la carpeta; `null` = fuera de ella. */
+export interface MoneyFlow {
+  from: string | null;
+  to: string | null;
+}
+
+/**
+ * Lo que se anima al registrar un movimiento: el ingreso entra a su sobre, el
+ * gasto sale; con tarjeta el dinero pasa del sobre al de reserva (sigue en el
+ * banco, ahora apartado) y el pago de tarjeta sale de la reserva. Lo que no
+ * mueve sobres (depósito/retiro, cancelación) no se anima.
+ */
+export function moneyFlowOf(movement: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId">): MoneyFlow | null {
+  const flow = (from: string | undefined | null, to: string | undefined | null): MoneyFlow | null =>
+    (from ?? null) === (to ?? null) ? null : { from: from ?? null, to: to ?? null };
+  switch (movement.kind) {
+    case "income":
+      return flow(null, movement.envelopeId);
+    case "expense":
+      return flow(movement.envelopeId, movement.reserveEnvelopeId ?? null);
+    case "assignment":
+      return flow(movement.envelopeId, movement.toEnvelopeId);
+    case "cardPayment":
+      return flow(movement.reserveEnvelopeId, null);
+    default:
+      return null;
+  }
+}

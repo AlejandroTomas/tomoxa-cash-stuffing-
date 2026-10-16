@@ -85,6 +85,12 @@ escena: los nuevos crecen en su lugar, los archivados se encogen; caben 8 activo
 Archivar pide confirmación y solo aplica a sobres vacíos. Editar muestra la vista
 previa en vivo y guarda nombre, descripción, color e icono.
 
+Al registrar un movimiento (botón "Registrar") las fichas también se animan, según
+`moneyFlowOf`: el ingreso llega de fuera a su sobre, el gasto sale, la compra con
+tarjeta pasa del sobre a la reserva y el pago de tarjeta sale de la reserva
+(`transfer(from, to)` de la escena, con `null` = fuera). Solo con la carpeta abierta
+y sin un sobre fuera; depósito/retiro no se anima (no cambia sobres).
+
 ## Gestos (táctil y mouse)
 
 | Estado | ← → | ↑ | ↓ |

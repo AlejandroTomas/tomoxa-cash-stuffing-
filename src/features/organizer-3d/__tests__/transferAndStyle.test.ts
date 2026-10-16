@@ -1,6 +1,6 @@
 import { envelopeStyleSchema, toneFor } from "../domain/envelopeStyle";
 import { parseAmountMinor } from "@/features/ledger/domain/money";
-import { transferFormSchema } from "../domain/transfer";
+import { moneyFlowOf, transferFormSchema } from "../domain/transfer";
 
 
 describe("parseAmountMinor", () => {
@@ -49,5 +49,21 @@ describe("editar sobre", () => {
     expect(toneFor("#000000", 0.5)).toBe("#808080");
     expect(toneFor("#ffffff")).toBe("#ffffff");
     expect(toneFor("nope")).toBe("#ffffff");
+  });
+});
+
+describe("moneyFlowOf", () => {
+  it("ingreso entra, gasto sale y con tarjeta pasa a la reserva", () => {
+    expect(moneyFlowOf({ kind: "income", envelopeId: "available" })).toEqual({ from: null, to: "available" });
+    expect(moneyFlowOf({ kind: "expense", envelopeId: "week" })).toEqual({ from: "week", to: null });
+    expect(moneyFlowOf({ kind: "expense", envelopeId: "week", reserveEnvelopeId: "card" })).toEqual({ from: "week", to: "card" });
+    expect(moneyFlowOf({ kind: "cardPayment", reserveEnvelopeId: "card" })).toEqual({ from: "card", to: null });
+    expect(moneyFlowOf({ kind: "assignment", envelopeId: "available", toEnvelopeId: "savings" })).toEqual({ from: "available", to: "savings" });
+  });
+  it("lo que no mueve sobres no se anima", () => {
+    expect(moneyFlowOf({ kind: "accountTransfer" })).toBeNull();
+    expect(moneyFlowOf({ kind: "reversal" })).toBeNull();
+    // Gastar con tarjeta desde su propio sobre de reserva: entra y sale lo mismo.
+    expect(moneyFlowOf({ kind: "expense", envelopeId: "card", reserveEnvelopeId: "card" })).toBeNull();
   });
 });

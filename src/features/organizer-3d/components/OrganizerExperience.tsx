@@ -64,7 +64,7 @@ function overlaps(outer: DOMRect, inner: DOMRect): boolean {
  * movimientos vienen del libro (`features/ledger`), guardado en el dispositivo.
  */
 export function OrganizerExperience() {
-  const { view, selectedId, envelopes, activityFor, checkDraft, moveMoney, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
+  const { view, selectedId, envelopes, activityFor, checkDraft, moveMoney, animateMovement, cancelMovement, settleBinder, previewStyle, commitStyle, createEnvelope, archiveEnvelope, documents, visibleDocuments, filter, setFilter, stepDocument, busy, unavailable, perform, selectEnvelope, extractSelected, toggleBinder, step, back, setSafeArea, canvas } =
     useOrganizerController();
   const reduceMotion = useReducedMotion();
   const sceneRef = useRef<HTMLElement>(null);
@@ -283,7 +283,7 @@ export function OrganizerExperience() {
           onConfirm={(draft) => void onTransfer(draft)}
         />
       )}
-      <RecordMovementDialog open={dialog === "record"} onOpenChange={(open) => setDialog(open ? "record" : null)} defaults={recordDefaults} />
+      <RecordMovementDialog open={dialog === "record"} onOpenChange={(open) => setDialog(open ? "record" : null)} defaults={recordDefaults} onRecorded={(movement) => void animateMovement(movement)} />
       <AccountsSheet
         open={dialog === "accounts"}
         onOpenChange={(open) => setDialog(open ? "accounts" : null)}
