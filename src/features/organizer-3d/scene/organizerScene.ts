@@ -9,7 +9,7 @@ import { classifyGesture, TAP_SLOP } from "../domain/gestures";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentStack, type DocumentStack } from "./documents";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, DOCUMENT, DOCUMENT_DUCK, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "./contract";
@@ -36,6 +36,7 @@ const RINGS_OPEN = 0.36;
 const MOUTH_OPEN = 0.85;
 /** Documento fuera del sobre: al frente y un poco más grande (coordenadas del sobre). */
 const READING = { x: 0, y: 0.95, z: 0.7, scale: 1.22 };
+
 
 export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const { renderer, scene, camera, dispose: disposeStage } = createStage(mount);
@@ -347,6 +348,66 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     pickedId = null;
   }
 
+  /**
+   * Del abanico al frente sin atravesar a nadie (como los sobres): 1) sube en su
+   * plano hasta librar la boca, 2) viene al frente a esa altura, 3) baja a
+   * leerse. Devuelve cuándo cruzó y cuándo termina.
+   */
+  function docOut(tl: gsap.core.Timeline, mesh: THREE.Object3D, at: number) {
+    const up = d(0.3);
+    const across = d(0.35);
+    const down = d(0.4);
+    tl.call(() => {
+      mesh.visible = true;
+    }, [], at);
+    tl.to(mesh.position, { y: DOCUMENT_TRAVEL_Y, duration: up, ease: "power2.out" }, at);
+    tl.to(mesh.rotation, { z: 0, duration: up, ease: "power2.out" }, at);
+    tl.to(mesh.position, { x: READING.x, z: READING.z, duration: across, ease: "power2.inOut" }, at + up);
+    // Crece ya de este lado de la boca, para no rozarla.
+    tl.to(mesh.position, { y: READING.y, duration: down, ease: "power3.out" }, at + up + across);
+    tl.to(mesh.scale, { x: READING.scale, y: READING.scale, z: READING.scale, duration: down, ease: "power3.out" }, at + up + across);
+    return { crossed: at + up + across, end: at + up + across + down };
+  }
+
+  /** Del frente a su lugar por el mismo camino: sube, va atrás sobre su lugar y baja (al abanico o adentro). */
+  function docBack(tl: gsap.core.Timeline, mesh: THREE.Object3D, target: DocumentPose, at: number, stow: boolean) {
+    const up = d(0.3);
+    const across = d(0.35);
+    const down = d(stow ? 0.35 : 0.4);
+    tl.to(mesh.position, { y: DOCUMENT_TRAVEL_Y, duration: up, ease: "power2.out" }, at);
+    tl.to(mesh.scale, { x: 1, y: 1, z: 1, duration: up, ease: "power2.out" }, at);
+    tl.to(mesh.position, { x: target.x, z: target.z, duration: across, ease: "power2.inOut" }, at + up);
+    tl.to(mesh.rotation, { z: target.rz, duration: across, ease: "power2.inOut" }, at + up);
+    tl.to(mesh.position, { y: target.y, duration: down, ease: stow ? "power2.in" : "power2.out" }, at + up + across);
+    const end = at + up + across + down;
+    if (stow) {
+      tl.call(() => {
+        mesh.visible = false;
+      }, [], end);
+    }
+    return { crossed: at + up + across, end };
+  }
+
+  /** Los del abanico delante de `depth` (índice menor = más al frente) bajan para dejar pasar y vuelven. */
+  function duckFront(tl: gsap.core.Timeline, depth: number, from: number, until: number, moving: readonly string[]) {
+    if (!stack) return;
+    const fan = fanIds();
+    fan.forEach((id, index) => {
+      const item = stack?.items.get(id);
+      if (!item || index >= depth || moving.includes(id)) return;
+      const pose = fanPose(index, fan.length);
+      tl.to(item.mesh.position, { y: pose.y - DOCUMENT_DUCK, duration: d(0.25), ease: "power2.inOut" }, from);
+      tl.to(item.mesh.position, { y: pose.y, duration: d(0.35), ease: "power2.out" }, until);
+    });
+  }
+
+  /** Lugar al que vuelve un documento: su sitio en el abanico o, si el filtro lo dejó fuera, adentro del sobre. */
+  function homeOf(id: string): { pose: DocumentPose; stow: boolean; depth: number } {
+    const fan = fanIds();
+    const index = fan.indexOf(id);
+    return index >= 0 ? { pose: fanPose(index, fan.length), stow: false, depth: index } : { pose: insidePose(0), stow: true, depth: fan.length };
+  }
+
   async function openEnvelope(id: EnvelopeId, documents: readonly EnvelopeDocument[], visibleIds: readonly string[], phrase: string) {
     const part = byId.get(id);
     if (!part || disposed || stage !== "open") return;
@@ -388,11 +449,15 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   /** Guarda todos los documentos y cierra la boca; libera los documentos al final. Devuelve cuándo termina. */
   function stowDocuments(tl: gsap.core.Timeline, part: EnvelopePart, at: number): number {
-    let order = 0;
-    stack?.items.forEach((item) => stowDoc(tl, item.mesh, order++, at));
-    tl.to(part.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, at + d(0.3));
-    tl.call(() => disposeStack(), [], at + d(0.6));
-    return at + d(0.6);
+    // El que está fuera regresa primero por arriba de la boca; los demás bajan mientras tanto.
+    const picked = pickedId ? stack?.items.get(pickedId) : undefined;
+    const start = picked ? docBack(tl, picked.mesh, insidePose(0), at, true).crossed : at;
+    let order = picked ? 1 : 0;
+    stack?.items.forEach((item) => item !== picked && stowDoc(tl, item.mesh, order++, at));
+    const close = Math.max(at + d(0.3), start + d(0.1));
+    tl.to(part.mouth.rotation, { x: 0, duration: d(0.3), ease: "power2.inOut" }, close);
+    tl.call(() => disposeStack(), [], close + d(0.3));
+    return close + d(0.3);
   }
 
   async function closeEnvelope() {
@@ -429,25 +494,29 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     pickedId = id;
     fanTimeline?.kill();
     await play((tl) => {
-      // El que estaba fuera vuelve a su lugar.
+      // El que estaba fuera vuelve a su lugar; el nuevo sale cuando aquel ya cruzó.
       const prev = previous && previous !== id ? stack?.items.get(previous) : undefined;
-      if (prev) {
-        const fan = fanIds();
-        const index = fan.indexOf(prev.doc.id);
-        if (index >= 0) toDocPose(tl, prev.mesh, fanPose(index, fan.length), 0, d(0.45));
-        else stowDoc(tl, prev.mesh, 0, 0);
-      }
-      // Sale hacia arriba, luego al frente y derecho.
-      tl.to(item.mesh.position, { y: DOCUMENT.insideY + DOCUMENT.rise + 0.45, duration: d(0.25), ease: "power2.in" }, 0);
-      toDocPose(tl, item.mesh, { x: READING.x, y: READING.y, z: READING.z, rz: 0 }, d(0.25), d(0.55), "power3.out", READING.scale);
+      const prevHome = prev ? homeOf(prev.doc.id) : null;
+      const back = prev && prevHome ? docBack(tl, prev.mesh, prevHome.pose, 0, prevHome.stow) : { crossed: 0, end: 0 };
+      const out = docOut(tl, item.mesh, back.crossed);
+      // Los de enfrente de cualquiera de los dos se agachan mientras cruzan.
+      const depth = Math.max(homeOf(id).depth, prevHome?.depth ?? 0);
+      duckFront(tl, depth, 0, out.crossed, prev ? [id, prev.doc.id] : [id]);
     });
   }
 
   async function returnDocument() {
-    if (!stack || !pickedId || disposed || stage !== "reading") return;
+    const item = pickedId ? stack?.items.get(pickedId) : undefined;
+    if (!item || disposed || stage !== "reading") return;
     stage = "browsing";
     pickedId = null;
-    await play((tl) => arrange(tl, 0, 0));
+    const id = item.doc.id;
+    await play((tl) => {
+      // Los demás ya están en su lugar (el filtro los reacomoda aunque haya uno fuera); él regresa por arriba.
+      const home = homeOf(id);
+      const back = docBack(tl, item.mesh, home.pose, 0, home.stow);
+      duckFront(tl, home.depth, 0, back.crossed, [id]);
+    });
   }
 
   // ── Mover dinero entre sobres ─────────────────────────────────────────────

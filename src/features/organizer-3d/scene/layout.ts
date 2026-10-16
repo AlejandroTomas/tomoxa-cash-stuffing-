@@ -111,6 +111,15 @@ export const DOCUMENT = {
   rise: 1.2,
 } as const;
 
+/**
+ * Altura (centro, en coordenadas del sobre) a la que un documento cruza entre el
+ * abanico y el frente: su borde inferior libra la boca del sobre. Si cruzara más
+ * abajo atravesaría la cara del sobre y a los documentos de enfrente.
+ */
+export const DOCUMENT_TRAVEL_Y = ENVELOPE.height / 2 + DOCUMENT.height / 2 + 0.15;
+/** Cuánto bajan los documentos de enfrente para dejar pasar al que sale o regresa (quedan dentro del sobre). */
+export const DOCUMENT_DUCK = DOCUMENT.rise + 0.05;
+
 export interface DocumentPose {
   x: number;
   y: number;

@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, freeNdc, outsideNdc, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, ENVELOPE, fanPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
+import { BINDER, DOCUMENT, DOCUMENT_DUCK, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
 
@@ -192,5 +192,18 @@ describe("dinero que llega de fuera o se va", () => {
   it("si la zona es más chica que la holgura, se queda en su centro", () => {
     const tiny = { left: 0, right: 0.1, bottom: 0, top: 0.1 };
     expect(outsideNdc({ x: 0.9, y: 0.9 }, tiny)).toEqual({ x: 0.05, y: 0.05 });
+  });
+});
+
+describe("documentos que salen y regresan", () => {
+  const top = ENVELOPE.height / 2;
+  it("cruzan con su borde inferior por encima de la boca del sobre", () => expect(DOCUMENT_TRAVEL_Y - DOCUMENT.height / 2).toBeGreaterThan(top));
+  it("los de enfrente se agachan hasta quedar dentro del sobre", () => {
+    for (let index = 0; index < DOCUMENT.maxFan; index++) {
+      const pose = fanPose(index, DOCUMENT.maxFan);
+      // Con el giro del abanico la esquina sube un poco más que el centro.
+      const corner = (DOCUMENT.height / 2) * Math.cos(pose.rz) + (DOCUMENT.width / 2) * Math.abs(Math.sin(pose.rz));
+      expect(pose.y - DOCUMENT_DUCK + corner).toBeLessThan(top);
+    }
   });
 });
