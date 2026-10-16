@@ -59,15 +59,24 @@ describe("applyTransfer y sus movimientos", () => {
 describe("editar sobre", () => {
   const schema = envelopeStyleSchema(["Tarjeta", "Ahorro"]);
   it("acepta un estilo válido y recorta espacios", () =>
-    expect(schema.parse({ name: "  Viajes ", color: "#7f9fe6", icon: "wallet" })).toEqual({ name: "Viajes", color: "#7f9fe6", icon: "wallet" }));
+    expect(schema.parse({ name: "  Viajes ", description: " Vuelos y hotel ", color: "#7f9fe6", icon: "wallet" })).toEqual({
+      name: "Viajes",
+      description: "Vuelos y hotel",
+      color: "#7f9fe6",
+      icon: "wallet",
+    }));
   it("rechaza nombre vacío, largo o repetido (sin importar mayúsculas)", () => {
-    expect(schema.safeParse({ name: " ", color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
-    expect(schema.safeParse({ name: "x".repeat(17), color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
-    expect(schema.safeParse({ name: "ahorro", color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
+    expect(schema.safeParse({ name: " ", description: "", color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
+    expect(schema.safeParse({ name: "x".repeat(17), description: "", color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
+    expect(schema.safeParse({ name: "ahorro", description: "", color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
   });
   it("solo colores e iconos de la paleta", () => {
-    expect(schema.safeParse({ name: "Viajes", color: "#000000", icon: "wallet" }).success).toBe(false);
-    expect(schema.safeParse({ name: "Viajes", color: "#7f9fe6", icon: "rocket" }).success).toBe(false);
+    expect(schema.safeParse({ name: "Viajes", description: "", color: "#000000", icon: "wallet" }).success).toBe(false);
+    expect(schema.safeParse({ name: "Viajes", description: "", color: "#7f9fe6", icon: "rocket" }).success).toBe(false);
+  });
+  it("la descripción puede quedar vacía, pero no pasar de 60 caracteres", () => {
+    expect(schema.safeParse({ name: "Viajes", description: "   ", color: "#7f9fe6", icon: "wallet" }).success).toBe(true);
+    expect(schema.safeParse({ name: "Viajes", description: "x".repeat(61), color: "#7f9fe6", icon: "wallet" }).success).toBe(false);
   });
   it("tono claro del papel", () => {
     expect(toneFor("#000000", 0.5)).toBe("#808080");

@@ -16,7 +16,7 @@ import {
   CredenzaTitle,
 } from "@/components/ui/responsive-dialog";
 import { cn } from "@/lib/utils";
-import { ENVELOPE_ICON_OPTIONS, ENVELOPE_NAME_MAX, ENVELOPE_PALETTE, envelopeStyleSchema, type EnvelopeStyle } from "../domain/envelopeStyle";
+import { ENVELOPE_DESCRIPTION_MAX, ENVELOPE_ICON_OPTIONS, ENVELOPE_NAME_MAX, ENVELOPE_PALETTE, envelopeStyleSchema, type EnvelopeStyle } from "../domain/envelopeStyle";
 import type { EnvelopeItem } from "../mocks/envelopes.mock";
 import { ENVELOPE_ICONS } from "./envelopeIcons";
 
@@ -69,14 +69,14 @@ function EditEnvelopeForm({
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<EnvelopeStyle>({ resolver: zodResolver(schema), defaultValues: { name: item.name, color: item.color, icon: item.icon } });
-  const [name, color, icon] = useWatch({ control, name: ["name", "color", "icon"] });
+  } = useForm<EnvelopeStyle>({ resolver: zodResolver(schema), defaultValues: { name: item.name, description: item.description, color: item.color, icon: item.icon } });
+  const [name, description, color, icon] = useWatch({ control, name: ["name", "description", "color", "icon"] });
   const previewName = name.trim() || item.name;
 
   // La carpeta muestra los cambios mientras se edita.
   useEffect(() => {
-    onPreview({ name: previewName, color, icon });
-  }, [previewName, color, icon, onPreview]);
+    onPreview({ name: previewName, description: description.trim(), color, icon });
+  }, [previewName, description, color, icon, onPreview]);
 
   const Icon = ENVELOPE_ICONS[icon];
 
@@ -103,8 +103,11 @@ function EditEnvelopeForm({
         className="flex items-center gap-3 rounded-2xl border-2 px-4 py-3"
         style={{ backgroundColor: `color-mix(in oklch, ${color} 35%, var(--card))`, borderColor: `color-mix(in oklch, ${color} 60%, transparent)` }}
       >
-        <Icon className="size-7" strokeWidth={1.7} style={{ color: `color-mix(in oklch, ${color} 70%, var(--foreground))` }} />
-        <span className="truncate text-lg font-medium text-foreground">{previewName}</span>
+        <Icon className="size-7 shrink-0" strokeWidth={1.7} style={{ color: `color-mix(in oklch, ${color} 70%, var(--foreground))` }} />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-lg font-medium text-foreground">{previewName}</span>
+          {description.trim() && <span className="truncate text-xs text-muted-foreground">{description.trim()}</span>}
+        </span>
       </div>
 
       <div className="space-y-1.5">
@@ -126,6 +129,30 @@ function EditEnvelopeForm({
         {errors.name && (
           <p id="envelope-name-error" className="text-xs text-destructive">
             {errors.name.message}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between">
+          <Label htmlFor="envelope-description">Descripción</Label>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {description.trim().length}/{ENVELOPE_DESCRIPTION_MAX}
+          </span>
+        </div>
+        <Input
+          id="envelope-description"
+          maxLength={ENVELOPE_DESCRIPTION_MAX + 10}
+          autoComplete="off"
+          placeholder="¿Para qué es este sobre?"
+          aria-invalid={Boolean(errors.description)}
+          aria-describedby={errors.description ? "envelope-description-error" : undefined}
+          className="h-11 rounded-xl"
+          {...register("description")}
+        />
+        {errors.description && (
+          <p id="envelope-description-error" className="text-xs text-destructive">
+            {errors.description.message}
           </p>
         )}
       </div>
