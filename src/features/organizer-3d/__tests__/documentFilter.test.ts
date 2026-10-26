@@ -5,7 +5,7 @@ import { documentsFromLedger, signOf, sortByRecent, summarizeActivity, type Enve
 import { describeFilter, EMPTY_FILTER, filterDocuments, isEmptyFilter, normalizeText, quickFilters, weekStartOf, type DocumentFilter } from "../domain/documentFilter";
 import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
 
-const doc = (id: string, date: string, concept = "Súper"): EnvelopeDocument => ({ id, envelopeId: "week", date, concept, kind: "expense", direction: "out", amountMinor: 1000, movementId: id });
+const doc = (id: string, date: string, concept = "Súper"): EnvelopeDocument => ({ id, envelopeId: "week", date, concept, kind: "expense", direction: "out", amountMinor: 1000, movementId: id, details: [] });
 const ids = (docs: EnvelopeDocument[]) => docs.map((d) => d.id);
 const withDate = (date: DocumentFilter["date"], text = ""): DocumentFilter => ({ date, text });
 
@@ -120,4 +120,34 @@ describe("documentos de cada sobre, desde el libro", () => {
   });
 
   it("sin documentos no hay último movimiento", () => expect(summarizeActivity([])).toEqual({ movements: 0, lastMovement: null }));
+});
+
+describe("detalle de los documentos", () => {
+  const accounts = [
+    { id: "cash", name: "Efectivo", kind: "cash" as const, archived: false },
+    { id: "nu", name: "Nu", kind: "credit" as const, archived: false, card: { cutoffDay: 15, paymentDays: 20, reserveEnvelopeId: "nu-reserve" } },
+  ];
+  const envelopes = [
+    { id: "transport", name: "Transporte", description: "", color: "#7cc3a3", icon: "wallet" as const, order: 0, archived: false },
+    { id: "nu-reserve", name: "Nu", description: "", color: "#ee8586", icon: "card" as const, order: 1, archived: false },
+  ];
+  const base = { kind: "expense" as const, date: "2026-10-20", createdAt: "2026-10-20T10:00:00.000Z", concept: "Gasolina", envelopeId: "transport", splitId: "s1" };
+  const movements = [
+    { ...base, id: "a", amountMinor: 30000, accountId: "cash" },
+    { ...base, id: "b", amountMinor: 50000, accountId: "nu", reserveEnvelopeId: "nu-reserve" },
+  ];
+
+  it("un pago dividido es un solo documento con el total y sus formas de pago", () => {
+    const [document] = documentsFromLedger("transport", movements, {}, { accounts, envelopes });
+    expect(document).toMatchObject({ concept: "Gasolina", amountMinor: 80000, movementId: "a" });
+    expect(document.details).toEqual([
+      { label: "Pago dividido", value: "Efectivo $ 300.00 + Nu $ 500.00" },
+      { label: "Sale del sobre", value: "Transporte" },
+    ]);
+    expect(documentsFromLedger("transport", movements, {})).toHaveLength(1);
+  });
+
+  it("la reserva de la tarjeta recibe solo la parte con tarjeta", () => {
+    expect(documentsFromLedger("nu-reserve", movements, {}, { accounts, envelopes })).toMatchObject([{ concept: "Reserva: Gasolina", amountMinor: 50000, direction: "in" }]);
+  });
 });

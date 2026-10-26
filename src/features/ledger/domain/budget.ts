@@ -1,10 +1,18 @@
 import { parseLocalDate, toLocalIsoDate } from "@/utils/localDate";
+import { isInstallmentPurchase } from "./balances";
 import type { BudgetPeriod, Envelope, EnvelopeBudget, LedgerSettings, Movement } from "./types";
 
 /** Tope de un presupuesto (centavos): $10,000,000. */
 export const BUDGET_MAX_MINOR = 1_000_000_000;
 
 export const BUDGET_PERIOD_LABELS: Record<BudgetPeriod, string> = { week: "semana", month: "mes" };
+
+/**
+ * Qué cuenta como gasto del sobre: los gastos (una compra a meses no, porque no
+ * sale del sobre) y las mensualidades que el sobre aparta para la tarjeta.
+ */
+const countsAsSpending = (movement: Movement) =>
+  (movement.kind === "expense" && !isInstallmentPurchase(movement)) || (movement.kind === "assignment" && movement.installmentOf !== undefined);
 
 /** Primer y último día (incluidos) del periodo que contiene `date`. */
 export function budgetRange(date: string, period: BudgetPeriod, weekStartsOn: LedgerSettings["weekStartsOn"]): { start: string; end: string } {
@@ -44,7 +52,7 @@ export function budgetStatus(
   if (!envelope.budget) return null;
   const { start, end } = budgetRange(today, envelope.budget.period, weekStartsOn);
   const spentMinor = movements
-    .filter((movement) => movement.kind === "expense" && movement.envelopeId === envelope.id && !reversed[movement.id] && movement.date >= start && movement.date <= end)
+    .filter((movement) => movement.envelopeId === envelope.id && countsAsSpending(movement) && !reversed[movement.id] && movement.date >= start && movement.date <= end)
     .reduce((sum, movement) => sum + movement.amountMinor, 0);
   const { amountMinor } = envelope.budget;
   return {

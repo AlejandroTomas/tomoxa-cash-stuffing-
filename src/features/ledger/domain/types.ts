@@ -60,6 +60,12 @@ export type MovementKind = "income" | "expense" | "assignment" | "accountTransfe
  * - accountTransfer: accountId → toAccountId (débito/efectivo)
  * - cardPayment:     accountId (débito/efectivo) → toAccountId (crédito); consume reserveEnvelopeId
  * - reversal:        reversalOf
+ *
+ * Extras opcionales:
+ * - splitId:      partes de un mismo gasto pagado con varias formas (se cancelan juntas)
+ * - installments: compra con tarjeta a meses sin intereses (solo sube la deuda; el
+ *                 sobre paga cada mensualidad con un `assignment` a la reserva)
+ * - installmentOf / installmentNumber: ese `assignment` que aparta la mensualidad n
  */
 export interface Movement {
   id: string;
@@ -75,6 +81,10 @@ export interface Movement {
   toEnvelopeId?: string;
   reserveEnvelopeId?: string;
   reversalOf?: string;
+  splitId?: string;
+  installments?: number;
+  installmentOf?: string;
+  installmentNumber?: number;
 }
 
 /** Datos del libro que hacen falta para calcular saldos y validar. */

@@ -1,5 +1,8 @@
 import type { Account, LedgerSnapshot, Movement } from "./types";
 
+/** Compra a meses sin intereses (2 o más mensualidades). */
+export const isInstallmentPurchase = (movement: Movement) => movement.kind === "expense" && (movement.installments ?? 1) > 1;
+
 /** Cambio que un movimiento produce en un saldo. */
 export interface Effect {
   target: "account" | "envelope" | "debt";
@@ -19,6 +22,10 @@ export function effectsOf(movement: Movement, accountsById: ReadonlyMap<string, 
       return [...e("account", movement.accountId, a), ...e("envelope", movement.envelopeId, a)];
     case "expense": {
       const account = movement.accountId ? accountsById.get(movement.accountId) : undefined;
+      if (account?.kind === "credit" && isInstallmentPurchase(movement)) {
+        // A meses: solo la deuda. El sobre paga cada mensualidad cuando se aparta.
+        return e("debt", account.id, a);
+      }
       if (account?.kind === "credit") {
         // Gasto del sobre + deuda; el monto queda reservado para pagar la tarjeta.
         return [...e("debt", account.id, a), ...e("envelope", movement.envelopeId, -a), ...e("envelope", movement.reserveEnvelopeId, a)];
@@ -86,14 +93,15 @@ export const overdrawn = (balances: Balances) => Object.values(balances.envelope
 /**
  * Deuda sin respaldo: lo que se debe en tarjetas y no está cubierto por dinero
  * real apartado. La reserva de las tarjetas solo cuenta si no la están
- * "pidiendo prestada" sobres sobregirados.
+ * "pidiendo prestada" sobres sobregirados. `deferred` (por tarjeta) es la parte
+ * de compras a meses que todavía no toca apartar: no cuenta como deuda sin respaldo.
  */
-export function unbackedDebt(balances: Balances, accounts: readonly Account[]): number {
+export function unbackedDebt(balances: Balances, accounts: readonly Account[], deferred: Readonly<Record<string, number>> = {}): number {
   let debt = 0;
   let reserve = 0;
   for (const account of accounts) {
     if (account.kind !== "credit") continue;
-    debt += balances.debt[account.id] ?? 0;
+    debt += Math.max(0, (balances.debt[account.id] ?? 0) - (deferred[account.id] ?? 0));
     if (account.card) reserve += Math.max(0, balances.envelopes[account.card.reserveEnvelopeId] ?? 0);
   }
   const backing = Math.max(0, reserve - overdrawn(balances));

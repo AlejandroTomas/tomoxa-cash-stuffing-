@@ -42,7 +42,7 @@ export function checkEnvelope(envelope: Envelope, envelopes: readonly Envelope[]
 /** Archivar: no el sobre de ingresos ni la reserva de una tarjeta, y solo vacío (para no perder dinero de vista). */
 export function checkArchive(envelope: Envelope, balances: Balances, accounts: readonly Account[]): EnvelopeIssue | null {
   if (envelope.id === UNASSIGNED_ENVELOPE_ID) return { code: "PROTECTED", field: "form", message: "Disponible no se puede archivar: ahí entran los ingresos." };
-  const card = accounts.find((account) => account.card?.reserveEnvelopeId === envelope.id);
+  const card = accounts.find((account) => !account.archived && account.card?.reserveEnvelopeId === envelope.id);
   if (card) return { code: "PROTECTED", field: "form", message: `Este sobre es la reserva de ${card.name}; no se puede archivar.` };
   const balance = balances.envelopes[envelope.id] ?? 0;
   if (balance !== 0) return { code: "NOT_EMPTY", field: "form", message: "Primero mueve su dinero a otro sobre: solo se archivan sobres vacíos." };

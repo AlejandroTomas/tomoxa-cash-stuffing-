@@ -60,6 +60,10 @@ const movementSchema = z.object({
   toEnvelopeId: optionalId,
   reserveEnvelopeId: optionalId,
   reversalOf: optionalId,
+  splitId: optionalId,
+  installments: z.number().int().optional(),
+  installmentOf: optionalId,
+  installmentNumber: z.number().int().optional(),
 });
 
 const settingsSchema = z.object({

@@ -51,6 +51,21 @@ export function createLedgerRepository(database: () => LedgerDatabase = ledgerDa
       await database().movements.add(movement);
     },
 
+    /** Varios movimientos que van juntos (un pago dividido, una cancelación de grupo): todos o ninguno. */
+    async addMovements(movements: readonly Movement[]): Promise<void> {
+      const db = database();
+      await db.transaction("rw", db.movements, () => db.movements.bulkAdd([...movements]));
+    },
+
+    /** Una cuenta y su sobre de reserva (tarjeta nueva, archivada o renombrada): juntos o ninguno. */
+    async putAccountWithEnvelope(account: Account, envelope: Envelope | null): Promise<void> {
+      const db = database();
+      await db.transaction("rw", [db.accounts, db.envelopes], async () => {
+        await db.accounts.put(account);
+        if (envelope) await db.envelopes.put(envelope);
+      });
+    },
+
     async putEnvelope(envelope: Envelope): Promise<void> {
       await database().envelopes.put(envelope);
     },

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { AlertTriangle, Banknote, CreditCard, Download, Eraser, Landmark, Plus, RotateCcw, Trash2, Undo2, Upload } from "lucide-react";
+import { AlertTriangle, Banknote, CalendarClock, CreditCard, Download, Eraser, Landmark, Plus, RotateCcw, Trash2, Undo2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,18 +18,22 @@ import { cn } from "@/lib/utils";
 import { showDialog } from "@/utils/dialogService";
 import { toLocalIsoDate } from "@/utils/localDate";
 import { backupFileName } from "../domain/backup";
-import { paymentDueSoon, type CardSummary } from "../domain/cards";
+import { installmentDraft, paymentDueSoon, type CardSummary } from "../domain/cards";
+import { splitParts } from "../domain/details";
+import type { InstallmentPlan } from "../domain/installments";
 import { formatMinor } from "../domain/money";
-import type { Account, Movement } from "../domain/types";
-import { cancelMovement, exportLedger, importLedger, saveCardSettings, saveLedgerSettings, startLedger } from "../ledgerSlice";
+import type { Movement } from "../domain/types";
+import { cancelMovement, exportLedger, importLedger, recordMovement, saveLedgerSettings, startLedger } from "../ledgerSlice";
 import { selectAccounts, selectActiveEnvelopes, selectBalances, selectBudgets, selectCardSummaries, selectEnvelopes, selectLedgerHealth, selectLedgerSettings, selectMovements } from "../selector";
+import { AccountsSettings } from "./AccountsSettings";
+import { ReminderSettings } from "./PaymentReminders";
 import { dueText, formatDay, MOVEMENT_LABELS, WEEKDAYS } from "./format";
 
 interface AccountsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Abre el registro con "Pagar tarjeta". */
-  onPayCard: () => void;
+  /** Abre el registro con "Pagar tarjeta" y esa tarjeta elegida. */
+  onPayCard: (accountId: string) => void;
   /** Cubrir un sobre sobregirado o apartar su presupuesto (mover `amountMinor` hacia él; al apartar, desde Disponible si alcanza). */
   onCover: (envelopeId: string, amountMinor: number, preferAvailable?: boolean) => void;
   /** Cancela un movimiento (el organizador guarda antes lo que esté abierto). Sin él, se cancela directo. */
@@ -66,7 +70,8 @@ export function AccountsSheet({ open, onOpenChange, onPayCard, onCover, onCancel
               <RecentMovements onCancelMovement={onCancelMovement} />
             </TabsContent>
             <TabsContent value="settings" className="mt-2 flex flex-col gap-6">
-              <CardSettingsSection />
+              <AccountsSettings />
+              <ReminderSettings />
               <IncomeSettings />
               <BackupSection onBeforeReplace={onBeforeReplace} />
             </TabsContent>
@@ -85,25 +90,31 @@ function useToday() {
 function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | "onCover">) {
   const accounts = useAppSelector(selectAccounts);
   const balances = useAppSelector(selectBalances);
-  const health = useAppSelector(selectLedgerHealth);
-  const envelopes = useAppSelector(selectActiveEnvelopes);
   const today = useToday();
+  const health = useAppSelector((state) => selectLedgerHealth(state, today));
+  const envelopes = useAppSelector(selectActiveEnvelopes);
   const cards = useAppSelector((state) => selectCardSummaries(state, today));
   const money = accounts.filter((account) => !account.archived && account.kind !== "credit").sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "debit" ? -1 : 1));
   const overdrawn = envelopes.filter((envelope) => (balances.envelopes[envelope.id] ?? 0) < 0);
   const due = cards.filter((card) => paymentDueSoon(card.statement));
+  const installmentsDue = cards.flatMap((card) => card.plans).filter((plan) => plan.nextDue);
   const budgets = useAppSelector((state) => selectBudgets(state, today));
   const budgeted = envelopes.filter((envelope) => budgets[envelope.id]);
 
   return (
     <div className="flex flex-col gap-5">
-      {(due.length > 0 || health.unbackedDebt > 0 || overdrawn.length > 0) && (
+      {(due.length > 0 || installmentsDue.length > 0 || health.unbackedDebt > 0 || overdrawn.length > 0) && (
         <div role="status" className="flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-foreground">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
           <p>
             {due.map((card) => (
               <span key={card.account.id}>
                 Paga {formatMinor(card.statement.amount)} de {card.account.name} {dueText(card.statement.due, card.statement.daysLeft)}.{" "}
+              </span>
+            ))}
+            {installmentsDue.map((plan) => (
+              <span key={plan.purchase.id}>
+                Aparta la mensualidad {plan.next?.number} de {plan.months} de {plan.purchase.concept} ({formatMinor(plan.next?.amountMinor ?? 0)}, {plan.account.name}).{" "}
               </span>
             ))}
             {health.unbackedDebt > 0 && <>Tienes {formatMinor(health.unbackedDebt)} de deuda sin dinero apartado. </>}
@@ -192,8 +203,9 @@ function Summary({ onPayCard, onCover }: Pick<AccountsSheetProps, "onPayCard" | 
   );
 }
 
-function CardPanel({ card, onPay }: { card: CardSummary; onPay: () => void }) {
+function CardPanel({ card, onPay }: { card: CardSummary; onPay: (accountId: string) => void }) {
   const { statement } = card;
+  const plans = card.plans.filter((plan) => plan.next);
   const urgent = paymentDueSoon(statement);
   return (
     <section aria-labelledby={`card-${card.account.id}`} className="space-y-2">
@@ -236,85 +248,58 @@ function CardPanel({ card, onPay }: { card: CardSummary; onPay: () => void }) {
           <dd className="text-foreground tabular-nums">{formatDay(card.nextCutoff)}</dd>
         </div>
       </dl>
-      <Button className="w-full rounded-xl" disabled={!card.debt} onClick={onPay}>
-        <CreditCard /> Pagar tarjeta
+      {plans.length > 0 && <InstallmentList plans={plans} />}
+      <Button className="w-full rounded-xl" disabled={!card.debt} onClick={() => onPay(card.account.id)}>
+        <CreditCard /> Pagar {card.account.name}
       </Button>
     </section>
   );
 }
 
-const dayField = (min: number, max: number, message: string) =>
-  z
-    .string()
-    .trim()
-    .regex(/^\d{1,2}$/, message)
-    .refine((value) => Number(value) >= min && Number(value) <= max, message);
-
-const cardFormSchema = z.object({
-  cutoffDay: dayField(1, 31, "Del 1 al 31."),
-  paymentDays: dayField(1, 60, "De 1 a 60."),
-});
-type CardForm = z.infer<typeof cardFormSchema>;
-
-function CardSettingsSection() {
-  const accounts = useAppSelector(selectAccounts);
-  const cards = accounts.filter((account): account is Account & { card: NonNullable<Account["card"]> } => account.kind === "credit" && !account.archived && Boolean(account.card));
-  return (
-    <>
-      {cards.map((account) => (
-        <CardSettingsForm key={account.id} account={account} />
-      ))}
-    </>
-  );
-}
-
-function CardSettingsForm({ account }: { account: Account & { card: NonNullable<Account["card"]> } }) {
+/** Compras a meses de una tarjeta: avance y botón para apartar la mensualidad que toca. */
+function InstallmentList({ plans }: { plans: readonly InstallmentPlan[] }) {
   const dispatch = useAppDispatch();
-  const [saving, setSaving] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isDirty },
-    reset,
-  } = useForm<CardForm>({
-    resolver: zodResolver(cardFormSchema),
-    defaultValues: { cutoffDay: String(account.card.cutoffDay), paymentDays: String(account.card.paymentDays) },
-  });
+  const today = useToday();
+  const [saving, setSaving] = useState<string | null>(null);
 
-  const onSubmit = async (form: CardForm) => {
-    setSaving(true);
+  const setAside = async (plan: InstallmentPlan) => {
+    const draft = installmentDraft(plan, today);
+    if (!draft) return;
+    setSaving(plan.purchase.id);
     try {
-      const saved = await dispatch(saveCardSettings({ accountId: account.id, card: { cutoffDay: Number(form.cutoffDay), paymentDays: Number(form.paymentDays) } })).unwrap();
-      reset({ cutoffDay: String(saved.card?.cutoffDay), paymentDays: String(saved.card?.paymentDays) });
-      toast.success(`Guardado: ${account.name}.`);
+      await dispatch(recordMovement(draft)).unwrap();
+      toast.success(`Apartada la mensualidad ${plan.next?.number} de ${plan.months}: ${plan.purchase.concept}.`);
     } catch {
-      // El middleware ya mostró el error.
+      // El middleware ya mostró el error (p. ej., no alcanza en el sobre).
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-3">
-      <h3 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <CreditCard className="size-4" aria-hidden="true" /> {account.name}
-      </h3>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor={`cutoff-${account.id}`}>Día de corte</Label>
-          <Input id={`cutoff-${account.id}`} inputMode="numeric" aria-invalid={Boolean(errors.cutoffDay)} className="rounded-xl tabular-nums" {...register("cutoffDay")} />
-          {errors.cutoffDay && <p className="text-xs text-destructive">{errors.cutoffDay.message}</p>}
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`days-${account.id}`}>Días para pagar</Label>
-          <Input id={`days-${account.id}`} inputMode="numeric" aria-invalid={Boolean(errors.paymentDays)} className="rounded-xl tabular-nums" {...register("paymentDays")} />
-          {errors.paymentDays && <p className="text-xs text-destructive">{errors.paymentDays.message}</p>}
-        </div>
-      </div>
-      <Button type="submit" size="sm" variant="outline" className="rounded-full" disabled={!isDirty || saving}>
-        Guardar
-      </Button>
-    </form>
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <CalendarClock className="size-3.5" aria-hidden="true" /> Meses sin intereses
+      </p>
+      <ul className={panel}>
+        {plans.map((plan) => (
+          <li key={plan.purchase.id} className="flex items-center gap-3 py-2.5">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-foreground/80">{plan.purchase.concept}</span>
+              <span className={cn("block text-xs tabular-nums", plan.nextDue ? "font-medium text-warning" : "text-muted-foreground")}>
+                {plan.setAside.length} de {plan.months} apartadas · falta {formatMinor(plan.remainingMinor)}
+                {plan.next && ` · la ${plan.next.number}.ª se cobra el ${formatDay(plan.next.cutoff)}`}
+              </span>
+            </span>
+            {plan.next && (
+              <Button size="sm" variant={plan.nextDue ? "default" : "outline"} className="shrink-0 rounded-full" disabled={saving !== null} onClick={() => void setAside(plan)}>
+                Apartar {formatMinor(plan.next.amountMinor)}
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -450,6 +435,8 @@ function RecentMovements({ onCancelMovement }: Pick<AccountsSheetProps, "onCance
     () =>
       movements
         .filter((movement) => movement.kind !== "reversal" && !balances.reversed[movement.id])
+        // Un pago dividido se muestra una vez (con su primera parte).
+        .filter((movement) => !movement.splitId || splitParts(movement, movements)[0].id === movement.id)
         .sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)))
         .slice(0, RECENT_LIMIT),
     [movements, balances.reversed],
@@ -459,18 +446,22 @@ function RecentMovements({ onCancelMovement }: Pick<AccountsSheetProps, "onCance
     switch (movement.kind) {
       case "income":
         return `${nameOf(movement.accountId)} → ${nameOf(movement.envelopeId)}`;
-      case "expense":
-        return `${nameOf(movement.envelopeId)} · ${nameOf(movement.accountId)}`;
+      case "expense": {
+        const paidWith = splitParts(movement, movements).map((part) => nameOf(part.accountId)).join(" + ");
+        return `${nameOf(movement.envelopeId)} · ${paidWith}${movement.installments ? ` · ${movement.installments} MSI` : ""}`;
+      }
       default:
         return `${nameOf(movement.accountId ?? movement.envelopeId)} → ${nameOf(movement.toAccountId ?? movement.toEnvelopeId)}`;
     }
   };
 
+  const amountOf = (movement: Movement) => splitParts(movement, movements).reduce((sum, part) => sum + part.amountMinor, 0);
+
   const confirmCancel = (movement: Movement) =>
     showDialog({
       type: "question",
       title: "¿Cancelar este movimiento?",
-      message: `${movement.concept} (${formatMinor(movement.amountMinor)}). Se registra una cancelación con fecha de hoy y los saldos vuelven a como estaban; el original queda en el historial.`,
+      message: `${movement.concept} (${formatMinor(amountOf(movement))})${movement.splitId ? ", con todas sus formas de pago" : ""}. Se registra una cancelación con fecha de hoy y los saldos vuelven a como estaban; el original queda en el historial.`,
       confirmText: "Cancelar movimiento",
       cancelText: "No",
       onConfirm: () => {
@@ -495,7 +486,7 @@ function RecentMovements({ onCancelMovement }: Pick<AccountsSheetProps, "onCance
               {MOVEMENT_LABELS[movement.kind]} · {formatDay(movement.date)} · {route(movement)}
             </p>
           </div>
-          <span className="shrink-0 font-medium text-foreground tabular-nums">{formatMinor(movement.amountMinor)}</span>
+          <span className="shrink-0 font-medium text-foreground tabular-nums">{formatMinor(amountOf(movement))}</span>
           <Button variant="ghost" size="icon-sm" aria-label={`Cancelar ${movement.concept}`} onClick={() => confirmCancel(movement)} className="shrink-0 rounded-full text-muted-foreground hover:text-destructive">
             <Undo2 />
           </Button>

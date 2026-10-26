@@ -232,6 +232,16 @@ export function DocumentsPanel({ item, stage, busy, documents, visible, document
               {signOf(picked)}
               {formatAmount(picked.amountMinor / 100)}
             </p>
+            {picked.details.length > 0 && (
+              <dl className="mt-3 divide-y divide-border/70 rounded-xl border border-border/70 bg-background/40 px-3 text-sm">
+                {picked.details.map((detail) => (
+                  <div key={detail.label} className="flex items-baseline justify-between gap-3 py-1.5">
+                    <dt className="shrink-0 text-xs text-muted-foreground">{detail.label}</dt>
+                    <dd className="min-w-0 text-right font-medium text-foreground tabular-nums">{detail.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
             <div className="mt-3 flex items-center gap-2">
               <Button className="flex-1 rounded-xl" disabled={busy} onClick={onReturnDocument}>
                 <ArrowLeft /> Regresar al sobre
@@ -265,8 +275,9 @@ export function DocumentsPanel({ item, stage, busy, documents, visible, document
               >
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium text-foreground">{doc.concept}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="truncate text-xs text-muted-foreground">
                     {format(parseLocalDate(doc.date), "EEE d MMM", { locale: es })} · {KIND_LABELS[doc.kind]}
+                    {doc.details[0] && ` · ${doc.details[0].label.toLocaleLowerCase("es")} ${doc.details[0].value}`}
                   </span>
                 </span>
                 <span className="shrink-0 font-medium text-foreground tabular-nums">

@@ -33,15 +33,18 @@ export function useLedgerData() {
   }, [dispatch, loaded]);
 
   const envelopes: EnvelopeItem[] = useMemo(
-    () => visibleEnvelopes(activeEnvelopes, allEnvelopes, movements, balances.envelopes)
+    () => visibleEnvelopes(activeEnvelopes, accounts, movements, balances.envelopes)
       .map((envelope) => toEnvelopeItem(envelope, balances.envelopes[envelope.id] ?? 0)),
-    [activeEnvelopes, allEnvelopes, balances, movements],
+    [activeEnvelopes, accounts, balances, movements],
   );
 
   /** Saldo (centavos) de cada sobre activo. */
   const balanceOf = useCallback((id: EnvelopeId) => balances.envelopes[id] ?? 0, [balances]);
 
-  const documentsFor = useCallback((id: EnvelopeId) => documentsFromLedger(id, movements, balances.reversed), [movements, balances]);
+  const documentsFor = useCallback(
+    (id: EnvelopeId) => documentsFromLedger(id, movements, balances.reversed, { accounts, envelopes: allEnvelopes }),
+    [movements, balances, accounts, allEnvelopes],
+  );
   const activityFor = useCallback((id: EnvelopeId) => summarizeActivity(documentsFor(id)), [documentsFor]);
 
   /** Valida un movimiento con las mismas reglas que el servicio (antes de animar). */

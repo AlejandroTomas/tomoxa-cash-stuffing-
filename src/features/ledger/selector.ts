@@ -4,6 +4,7 @@ import type { RootState } from "@/store";
 import { computeBalances, overdrawn, totalCash, unbackedDebt } from "./domain/balances";
 import { budgetStatus, type BudgetStatus } from "./domain/budget";
 import { cardSummaries } from "./domain/cards";
+import { deferredByCard, installmentPlans } from "./domain/installments";
 
 /** Lectores del libro. Todo lo derivado (saldos) se calcula en `domain/`, memorizado. */
 export const selectLedgerLoaded = (state: RootState) => state.ledger.loaded;
@@ -23,11 +24,17 @@ export const selectBalances = createSelector([selectAccounts, selectEnvelopes, s
   computeBalances({ accounts, envelopes, movements }),
 );
 
-/** Resumen para avisos: dinero real, sobregirado y deuda sin respaldo. */
-export const selectLedgerHealth = createSelector([selectBalances, selectAccounts], (balances, accounts) => ({
+/** Compras a meses vigentes con su avance. `today` = "YYYY-MM-DD". */
+export const selectInstallmentPlans = createSelector(
+  [selectAccounts, selectMovements, selectBalances, (_state: RootState, today: string) => today],
+  (accounts, movements, balances, today) => installmentPlans(accounts, movements, balances.reversed, today),
+);
+
+/** Resumen para avisos: dinero real, sobregirado y deuda sin respaldo (sin las mensualidades que aún no tocan). `today` = "YYYY-MM-DD". */
+export const selectLedgerHealth = createSelector([selectBalances, selectAccounts, selectInstallmentPlans], (balances, accounts, plans) => ({
   cash: totalCash(balances),
   overdrawn: overdrawn(balances),
-  unbackedDebt: unbackedDebt(balances, accounts),
+  unbackedDebt: unbackedDebt(balances, accounts, deferredByCard(plans)),
 }));
 
 /** Tarjetas con deuda, reserva, deuda sin respaldo, próximo corte y estado de cuenta. `today` = "YYYY-MM-DD". */

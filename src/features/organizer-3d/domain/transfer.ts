@@ -28,13 +28,15 @@ export interface MoneyFlow {
  * mueve sobres (depósito/retiro) no se anima; la cancelación se anima con
  * `reversalFlowOf` del original.
  */
-export function moneyFlowOf(movement: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId">): MoneyFlow | null {
+export function moneyFlowOf(movement: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId" | "installments">): MoneyFlow | null {
   const flow = (from: string | undefined | null, to: string | undefined | null): MoneyFlow | null =>
     (from ?? null) === (to ?? null) ? null : { from: from ?? null, to: to ?? null };
   switch (movement.kind) {
     case "income":
       return flow(null, movement.envelopeId);
     case "expense":
+      // A meses el sobre no se toca al comprar: paga cada mensualidad al apartarla.
+      if ((movement.installments ?? 1) > 1) return null;
       return flow(movement.envelopeId, movement.reserveEnvelopeId ?? null);
     case "assignment":
       return flow(movement.envelopeId, movement.toEnvelopeId);
@@ -46,7 +48,7 @@ export function moneyFlowOf(movement: Pick<Movement, "kind" | "envelopeId" | "to
 }
 
 /** Al cancelar un movimiento el dinero hace el camino inverso del original. */
-export function reversalFlowOf(original: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId">): MoneyFlow | null {
+export function reversalFlowOf(original: Pick<Movement, "kind" | "envelopeId" | "toEnvelopeId" | "reserveEnvelopeId" | "installments">): MoneyFlow | null {
   const flow = moneyFlowOf(original);
   return flow && { from: flow.to, to: flow.from };
 }

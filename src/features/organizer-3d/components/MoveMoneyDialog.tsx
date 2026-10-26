@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import type { LedgerIssue, MovementDraft } from "@/features/ledger/domain/validation";
 import { toLocalIsoDate } from "@/utils/localDate";
+import { filteredField, sanitizeAmountText } from "@/utils/numericInput";
 import { minorToInput, parseAmountMinor } from "@/features/ledger/domain/money";
 import { transferFormSchema, type TransferForm } from "../domain/transfer";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
@@ -168,7 +169,7 @@ function MoveMoneyForm({ envelopes, defaultFrom, defaultTo, defaultAmountMinor, 
             aria-invalid={Boolean(errors.amount)}
             aria-describedby={errors.amount ? "move-amount-error" : undefined}
             className="h-12 rounded-xl pl-7 text-lg tabular-nums"
-            {...register("amount")}
+            {...filteredField(register("amount"), sanitizeAmountText)}
           />
         </div>
         <div className="flex gap-1.5">

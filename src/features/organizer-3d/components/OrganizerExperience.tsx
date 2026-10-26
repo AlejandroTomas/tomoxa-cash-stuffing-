@@ -8,6 +8,7 @@ import { toast } from "@/core/toast";
 import type { EnvelopeStyle } from "../domain/envelopeStyle";
 import { AccountsSheet } from "@/features/ledger/components/AccountsSheet";
 import { RecordMovementDialog, type RecordDefaults } from "@/features/ledger/components/RecordMovementDialog";
+import { usePaymentReminders } from "@/features/ledger/components/PaymentReminders";
 import { MAX_ACTIVE_ENVELOPES, UNASSIGNED_ENVELOPE_ID } from "@/features/ledger/domain/envelopes";
 import { paymentDueSoon } from "@/features/ledger/domain/cards";
 import { selectCardSummaries, selectLedgerHealth } from "@/features/ledger/selector";
@@ -85,11 +86,16 @@ export function OrganizerExperience() {
   const [recordDefaults, setRecordDefaults] = useState<RecordDefaults>({});
   // Al cubrir un sobre sobregirado: origen, destino y monto propuestos.
   const [cover, setCover] = useState<{ from: string; to: string; amountMinor: number } | null>(null);
-  const health = useAppSelector(selectLedgerHealth);
+  usePaymentReminders();
   const [today] = useState(() => toLocalIsoDate(new Date()));
-  const cardDue = useAppSelector((state) => selectCardSummaries(state, today)).some((card) => paymentDueSoon(card.statement));
+  const health = useAppSelector((state) => selectLedgerHealth(state, today));
+  const cardSummaries = useAppSelector((state) => selectCardSummaries(state, today));
+  const cardDue = cardSummaries.some((card) => paymentDueSoon(card.statement));
+  const installmentDue = cardSummaries.some((card) => card.plans.some((plan) => plan.nextDue));
   // Un aviso por tema; si hay más de uno, se cuentan (el detalle está en Cuentas).
-  const alerts = [cardDue && "Pagar tarjeta", health.unbackedDebt > 0 && "Deuda sin respaldo", health.overdrawn > 0 && "Sobregirado"].filter((text): text is string => Boolean(text));
+  const alerts = [cardDue && "Pagar tarjeta", installmentDue && "Apartar mensualidad", health.unbackedDebt > 0 && "Deuda sin respaldo", health.overdrawn > 0 && "Sobregirado"].filter(
+    (text): text is string => Boolean(text),
+  );
   const alert = alerts.length > 1 ? `${alerts.length} avisos` : (alerts[0] ?? null);
   const openRecord = (defaults: RecordDefaults) => {
     setRecordDefaults(defaults);
@@ -306,7 +312,7 @@ export function OrganizerExperience() {
       <AccountsSheet
         open={dialog === "accounts"}
         onOpenChange={(open) => setDialog(open ? "accounts" : null)}
-        onPayCard={() => openRecord({ kind: "cardPayment" })}
+        onPayCard={(accountId) => openRecord({ kind: "cardPayment", toAccountId: accountId })}
         onCover={openCover}
         onCancelMovement={cancelMovement}
         onBeforeReplace={settleBinder}

@@ -1,5 +1,6 @@
 import { parseLocalDate } from "@/utils/localDate";
-import { computeBalances } from "./balances";
+import { computeBalances, isInstallmentPurchase } from "./balances";
+import { installmentAmount, MAX_INSTALLMENTS, setAsideByPurchase } from "./installments";
 import type { Account, LedgerSnapshot, Movement } from "./types";
 
 /** Lo que se va a registrar (el servicio pone `id` y `createdAt`). */
@@ -18,7 +19,8 @@ export type IssueCode =
   | "OVERPAYMENT"
   | "UNKNOWN_MOVEMENT"
   | "ALREADY_REVERSED"
-  | "NOT_REVERSIBLE";
+  | "NOT_REVERSIBLE"
+  | "INVALID_INSTALLMENTS";
 
 /** Por qué no se puede registrar. `message` es seguro para mostrar; `field` señala el campo. */
 export interface LedgerIssue {
@@ -64,6 +66,7 @@ export function checkMovement(draft: MovementDraft, snapshot: LedgerSnapshot): L
     return null;
   };
   const isIssue = (value: unknown): value is LedgerIssue => typeof value === "object" && value !== null && "code" in value;
+  const before = computeBalances(snapshot);
 
   if (draft.kind === "reversal") {
     const original = snapshot.movements.find((movement) => movement.id === draft.reversalOf);
@@ -94,6 +97,13 @@ export function checkMovement(draft: MovementDraft, snapshot: LedgerSnapshot): L
       if (source.kind === "credit" && draft.reserveEnvelopeId !== source.card?.reserveEnvelopeId) {
         return issue("WRONG_ACCOUNT_KIND", "accountId", `La tarjeta ${source.name} no tiene sobre de reserva.`);
       }
+      if (draft.installments !== undefined) {
+        if (source.kind !== "credit") return issue("INVALID_INSTALLMENTS", "installments", "Los meses sin intereses son solo con tarjeta de crédito.");
+        if (!Number.isInteger(draft.installments) || draft.installments < 2 || draft.installments > MAX_INSTALLMENTS) {
+          return issue("INVALID_INSTALLMENTS", "installments", `Elige de 2 a ${MAX_INSTALLMENTS} meses.`);
+        }
+        if (draft.amountMinor < draft.installments) return issue("INVALID_INSTALLMENTS", "amountMinor", "El monto es muy pequeño para dividirlo en meses.");
+      }
       break;
     }
     case "assignment": {
@@ -102,6 +112,19 @@ export function checkMovement(draft: MovementDraft, snapshot: LedgerSnapshot): L
       const to = envelope(draft.toEnvelopeId, "toEnvelopeId");
       if (to) return to;
       if (draft.envelopeId === draft.toEnvelopeId) return issue("SAME_SOURCE_AND_TARGET", "toEnvelopeId", "Elige un sobre distinto al de origen.");
+      if (draft.installmentOf !== undefined) {
+        const purchase = snapshot.movements.find((movement) => movement.id === draft.installmentOf);
+        if (!purchase || !isInstallmentPurchase(purchase) || before.reversed[purchase.id]) return issue("UNKNOWN_MOVEMENT", "installmentOf", "Esa compra a meses no existe o está cancelada.");
+        const card = accounts.get(purchase.accountId ?? "");
+        if (draft.toEnvelopeId !== card?.card?.reserveEnvelopeId) return issue("WRONG_ACCOUNT_KIND", "toEnvelopeId", "La mensualidad se aparta en la reserva de su tarjeta.");
+        const months = purchase.installments ?? 1;
+        const number = draft.installmentNumber ?? 0;
+        if (!Number.isInteger(number) || number < 1 || number > months) return issue("INVALID_INSTALLMENTS", "installmentNumber", "Esa mensualidad no existe.");
+        if ((setAsideByPurchase(snapshot.movements, before.reversed).get(purchase.id) ?? []).includes(number)) {
+          return issue("INVALID_INSTALLMENTS", "installmentNumber", `La mensualidad ${number} de ${months} ya está apartada.`);
+        }
+        if (draft.amountMinor !== installmentAmount(purchase.amountMinor, months, number)) return issue("INVALID_AMOUNT", "amountMinor", "El monto no coincide con la mensualidad.");
+      }
       break;
     }
     case "accountTransfer": {
@@ -124,8 +147,10 @@ export function checkMovement(draft: MovementDraft, snapshot: LedgerSnapshot): L
       break;
   }
 
+  if (draft.kind !== "expense" && draft.installments !== undefined) return issue("INVALID_INSTALLMENTS", "installments", "Solo un gasto puede ser a meses.");
+  if (draft.kind !== "assignment" && draft.installmentOf !== undefined) return issue("INVALID_INSTALLMENTS", "installmentOf", "Solo se aparta una mensualidad moviendo dinero.");
+
   // Reglas de saldo: se prueba el libro con el movimiento ya aplicado.
-  const before = computeBalances(snapshot);
   const candidate: Movement = { ...draft, id: "__candidate__", createdAt: "" };
   const after = computeBalances({ ...snapshot, movements: [...snapshot.movements, candidate] });
   for (const [id, value] of Object.entries(after.accounts)) {
@@ -142,6 +167,20 @@ export function checkMovement(draft: MovementDraft, snapshot: LedgerSnapshot): L
     if (draft.amountMinor > Math.max(0, available)) {
       return issue("INSUFFICIENT_FUNDS", "amountMinor", `No alcanza: en ${envelopes.get(draft.envelopeId)?.name ?? "el sobre"} hay ${fmt(Math.max(0, available))}.`);
     }
+  }
+  return null;
+}
+
+/**
+ * Varios movimientos que se guardan juntos (pago dividido): cada uno se prueba
+ * con los anteriores ya aplicados. Devuelve el primer problema y su posición.
+ */
+export function checkMovements(drafts: readonly MovementDraft[], snapshot: LedgerSnapshot): { index: number; issue: LedgerIssue } | null {
+  const applied: Movement[] = [];
+  for (const [index, draft] of drafts.entries()) {
+    const issue = checkMovement(draft, { ...snapshot, movements: [...snapshot.movements, ...applied] });
+    if (issue) return { index, issue };
+    applied.push({ ...draft, id: `__candidate-${index}__`, createdAt: "" });
   }
   return null;
 }

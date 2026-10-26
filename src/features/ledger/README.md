@@ -17,6 +17,8 @@ borra: se cancela con su inverso (`reversal`).
 | `expense` con crédito | + deuda de la tarjeta | − sobre del gasto · + sobre de reserva (monto completo) |
 | `assignment` (mover) | — | − origen · + destino |
 | `accountTransfer` (depósito/retiro) | − cuenta A · + cuenta B | — |
+| `expense` a meses (`installments`) | + deuda de la tarjeta (completa) | — (el sobre paga cada mensualidad al apartarla) |
+| `assignment` con `installmentOf` | — | − sobre de la compra · + reserva de la tarjeta (una mensualidad) |
 | `cardPayment` | − débito/efectivo · − deuda | − sobre de reserva |
 
 Apartar en el sobre Tarjeta no mueve dinero físico: si la reserva está en efectivo
@@ -30,6 +32,22 @@ intereses es lo comprado hasta el último corte menos lo pagado hasta hoy (los
 cancelados no cuentan). La fecha límite es la de ese corte, no la del periodo en
 curso. Se avisa en la nav cuando faltan `PAYMENT_REMINDER_DAYS` (5) días o menos.
 
+**Cuentas** (`accounts`): varias de débito, efectivo y tarjetas. Cada tarjeta nueva
+crea su propio sobre de reserva (con el nombre de la tarjeta); se archiva junto con
+ella y solo si no hay deuda ni reserva. La reserva de una tarjeta sin usar no se
+muestra en la carpeta, pero cuenta para el límite de 8 sobres.
+
+**Pago dividido** (`splitId`): un gasto pagado con varias formas son varios `expense`
+(uno por cuenta) con el mismo `splitId`; se guardan juntos y se cancelan juntos.
+
+**Meses sin intereses** (`installments`): la compra sube la deuda completa pero no
+toca el sobre. Cada corte cobra una mensualidad (la 1.ª en el corte del periodo de
+la compra); el estado de cuenta solo suma las cortadas. Cada mes el usuario aparta
+la mensualidad (`assignment` del sobre a la reserva con `installmentOf`). Lo que
+todavía no toca apartar no cuenta como deuda sin respaldo. Avisos: `reminders`
+(pagos y mensualidades) → `core/notify` (notificación al abrir la app o mientras
+está abierta; para avisar con la app cerrada haría falta Web Push con servidor).
+
 **Presupuesto** (`budget`): un sobre puede tener un monto por semana o por mes
 (`envelope.budget`, opcional). `budgetStatus` suma los gastos del sobre en el
 periodo actual (la semana empieza según `weekStartsOn`; con tarjeta también
@@ -40,15 +58,19 @@ que sobró de periodos anteriores cuenta. Es solo un plan: no bloquea gastos.
 domain/        types · balances (saldos, deuda sin respaldo) · validation (reglas) ·
                envelopes (crear/editar/archivar) · budget (presupuesto por periodo) · statement (cortes) · seed (datos de ejemplo) ·
                cards (resumen por tarjeta, ajustes, ingresos del día) · money (montos ↔ texto) ·
+               accounts (crear/editar/archivar cuentas) · installments (meses sin intereses) ·
+               details (de dónde salió y a dónde fue) · reminders (avisos de pago) ·
                movementForm (formulario de registro → movimiento) · backup (respaldo JSON validado)
 errors/        LedgerRuleError (ValidationError con code y campo)
 repositories/  ledgerDatabase (Dexie, versionada) · ledger.repository (privado)
 services/      ledger.service: open (detecta la 1.ª vez), start (de cero o con ejemplo), load,
-               record, cancel, saveEnvelope, archiveEnvelope, saveSettings, saveCardSettings,
+               record, recordSplit, cancel (un pago dividido completo), saveEnvelope, archiveEnvelope,
+               saveSettings, saveAccount, archiveAccount,
                exportBackup, importBackup
 actions/       thunks "ledger/…" (privados; se importan desde ledgerSlice)
 ledgerSlice.ts · selector.ts   estado y saldos memorizados (selectLedgerHealth, selectCardSummaries, selectBudgets)
-components/    RecordMovementDialog (gasto, ingreso, pago de tarjeta, depósito/retiro) ·
+components/    RecordMovementDialog (gasto —dividido o a meses—, ingreso, pago de tarjeta, depósito/retiro) ·
+               AccountsSettings (cuentas y tarjetas) · PaymentReminders (avisos) ·
                AccountsSheet (cuentas, deuda, presupuestos, sobregirados, movimientos con "cancelar", ajustes y respaldo)
 ```
 

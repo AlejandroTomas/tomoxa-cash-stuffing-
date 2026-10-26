@@ -1,4 +1,5 @@
-import type { Movement } from "@/features/ledger/domain/types";
+import { movementDetails, splitParts, type MovementDetail } from "@/features/ledger/domain/details";
+import type { Account, Envelope, Movement } from "@/features/ledger/domain/types";
 import type { EnvelopeId } from "./envelopeView";
 
 /** Qué representa un movimiento respecto al sobre. */
@@ -21,6 +22,8 @@ export interface EnvelopeDocument {
   amountMinor: number;
   /** Movimiento del libro del que sale (para cancelarlo). */
   movementId: string;
+  /** De dónde salió y a dónde fue ("Pagado con: Nu · tarjeta de crédito"). */
+  details: MovementDetail[];
 }
 
 /** Signo para mostrar un documento: "+ " si entró, "− " si salió. */
@@ -28,22 +31,45 @@ export const signOf = (document: Pick<EnvelopeDocument, "direction">) => (docume
 
 /**
  * Los movimientos del libro que tocan el sobre, vistos desde él. Los cancelados
- * y sus cancelaciones no aparecen (en conjunto no cambian nada).
+ * y sus cancelaciones no aparecen (en conjunto no cambian nada). Un pago
+ * dividido es un solo documento con el total; una compra a meses no aparece en
+ * su sobre hasta que se aparta cada mensualidad. Con `context` (cuentas y
+ * sobres) cada documento lleva su detalle.
  */
-export function documentsFromLedger(envelopeId: EnvelopeId, movements: readonly Movement[], reversed: Readonly<Record<string, string>>): EnvelopeDocument[] {
+export function documentsFromLedger(
+  envelopeId: EnvelopeId,
+  movements: readonly Movement[],
+  reversed: Readonly<Record<string, string>>,
+  context?: { accounts: readonly Account[]; envelopes: readonly Envelope[] },
+): EnvelopeDocument[] {
   const documents: EnvelopeDocument[] = [];
-  const add = (movement: Movement, kind: DocumentKind, direction: "in" | "out", concept = movement.concept) =>
-    documents.push({ id: `${movement.id}:${direction}`, envelopeId, date: movement.date, concept, kind, direction, amountMinor: movement.amountMinor, movementId: movement.id });
+  const add = (movement: Movement, kind: DocumentKind, direction: "in" | "out", concept = movement.concept, amountMinor = movement.amountMinor) =>
+    documents.push({
+      id: `${movement.id}:${direction}`,
+      envelopeId,
+      date: movement.date,
+      concept,
+      kind,
+      direction,
+      amountMinor,
+      movementId: movement.id,
+      details: context ? movementDetails(movement, { ...context, movements }) : [],
+    });
   for (const movement of movements) {
     if (movement.kind === "reversal" || reversed[movement.id]) continue;
     switch (movement.kind) {
       case "income":
         if (movement.envelopeId === envelopeId) add(movement, "income", "in");
         break;
-      case "expense":
-        if (movement.envelopeId === envelopeId) add(movement, "expense", "out");
+      case "expense": {
+        if ((movement.installments ?? 1) > 1) break;
+        const parts = splitParts(movement, movements);
+        if (movement.envelopeId === envelopeId && parts[0].id === movement.id) {
+          add(movement, "expense", "out", movement.concept, parts.reduce((sum, part) => sum + part.amountMinor, 0));
+        }
         if (movement.reserveEnvelopeId === envelopeId) add(movement, "assignment", "in", `Reserva: ${movement.concept}`);
         break;
+      }
       case "assignment":
         if (movement.envelopeId === envelopeId) add(movement, "assignment", "out");
         if (movement.toEnvelopeId === envelopeId) add(movement, "assignment", "in");

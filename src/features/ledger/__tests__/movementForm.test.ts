@@ -11,6 +11,8 @@ const form = (patch: Partial<MovementForm>): MovementForm => ({
   accountId: "debit",
   toAccountId: "",
   envelopeId: "week",
+  installments: "1",
+  splits: [],
   ...patch,
 });
 const snapshot = { accounts: SEED_ACCOUNTS, envelopes: SEED_ENVELOPES, movements: seedMovements() };
@@ -30,22 +32,56 @@ describe("montos", () => {
 describe("draftFromForm", () => {
   it("gasto con tarjeta lleva el sobre de reserva y pasa las reglas", () => {
     const result = draftFromForm(form({ accountId: "visa" }), SEED_ACCOUNTS);
-    expect(result).toEqual({ draft: { kind: "expense", date: "2026-10-15", concept: "Súper", amountMinor: 12000, accountId: "visa", envelopeId: "week", reserveEnvelopeId: "card" } });
-    if ("draft" in result) expect(checkMovement(result.draft, snapshot)).toBeNull();
+    expect(result).toEqual({ drafts: [{ kind: "expense", date: "2026-10-15", concept: "Súper", amountMinor: 12000, accountId: "visa", envelopeId: "week", reserveEnvelopeId: "card" }] });
+    if ("drafts" in result) expect(checkMovement(result.drafts[0], snapshot)).toBeNull();
   });
 
   it("ingreso a Disponible", () => {
     const result = draftFromForm(form({ kind: "income", concept: "Nómina", accountId: "debit", envelopeId: "available" }), SEED_ACCOUNTS);
-    expect("draft" in result && result.draft.kind).toBe("income");
-    if ("draft" in result) expect(checkMovement(result.draft, snapshot)).toBeNull();
+    expect("drafts" in result && result.drafts[0].kind).toBe("income");
+    if ("drafts" in result) expect(checkMovement(result.drafts[0], snapshot)).toBeNull();
   });
 
   it("pago de tarjeta y depósito/retiro ponen un concepto si se deja vacío", () => {
     const payment = draftFromForm(form({ kind: "cardPayment", concept: "", amount: "100", accountId: "debit", toAccountId: "visa" }), SEED_ACCOUNTS);
-    expect(payment).toMatchObject({ draft: { concept: "Pago de Tarjeta de crédito", reserveEnvelopeId: "card", toAccountId: "visa" } });
-    if ("draft" in payment) expect(checkMovement(payment.draft, snapshot)).toBeNull();
+    expect(payment).toMatchObject({ drafts: [{ concept: "Pago de Tarjeta de crédito", reserveEnvelopeId: "card", toAccountId: "visa" }] });
+    if ("drafts" in payment) expect(checkMovement(payment.drafts[0], snapshot)).toBeNull();
     expect(defaultConcept({ kind: "accountTransfer", accountId: "debit", toAccountId: "cash" }, SEED_ACCOUNTS)).toBe("Retiro de efectivo");
     expect(defaultConcept({ kind: "accountTransfer", accountId: "cash", toAccountId: "debit" }, SEED_ACCOUNTS)).toBe("Depósito a débito");
+  });
+
+  it("a meses solo con tarjeta", () => {
+    expect(draftFromForm(form({ accountId: "visa", installments: "18" }), SEED_ACCOUNTS)).toMatchObject({ drafts: [{ installments: 18 }] });
+    const cash = draftFromForm(form({ accountId: "cash", installments: "18" }), SEED_ACCOUNTS);
+    expect("drafts" in cash && cash.drafts[0].installments).toBeUndefined();
+  });
+
+  it("pago dividido: una parte por cuenta y deben sumar el total", () => {
+    const split = (splits: MovementForm["splits"]) => draftFromForm(form({ amount: "500", splits }), SEED_ACCOUNTS);
+    expect(
+      split([
+        { accountId: "cash", amount: "200" },
+        { accountId: "visa", amount: "300" },
+      ]),
+    ).toMatchObject({ drafts: [{ accountId: "cash", amountMinor: 20000 }, { accountId: "visa", amountMinor: 30000, reserveEnvelopeId: "card" }] });
+    expect(
+      split([
+        { accountId: "cash", amount: "200" },
+        { accountId: "visa", amount: "200" },
+      ]),
+    ).toMatchObject({ field: "root" });
+    expect(
+      split([
+        { accountId: "cash", amount: "200" },
+        { accountId: "cash", amount: "300" },
+      ]),
+    ).toMatchObject({ field: "splits.1.accountId" });
+    expect(
+      split([
+        { accountId: "cash", amount: "x" },
+        { accountId: "visa", amount: "300" },
+      ]),
+    ).toMatchObject({ field: "splits.0.amount" });
   });
 
   it("monto inválido o gasto sin concepto", () => {

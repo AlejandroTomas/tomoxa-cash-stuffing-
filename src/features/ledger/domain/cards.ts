@@ -1,12 +1,14 @@
 import { differenceInCalendarDays } from "date-fns";
 import { parseLocalDate } from "@/utils/localDate";
-import { overdrawn, type Balances } from "./balances";
+import { isInstallmentPurchase, overdrawn, type Balances } from "./balances";
+import { billedThrough, deferredByCard, installmentPlans, type InstallmentPlan } from "./installments";
+import { CONCEPT_MAX, type MovementDraft } from "./validation";
 import { lastCutoffOnOrBefore, statementPeriodFor } from "./statement";
 import type { Account, CardSettings, LedgerSettings, Movement, RecurringIncome } from "./types";
 
 /** Situación de una tarjeta para mostrar y para proponer el pago. */
 export interface CardSummary {
-  account: Account;
+  account: Account & { card: CardSettings };
   /** Lo que se debe. */
   debt: number;
   /** Dinero apartado en su sobre de reserva (puede ser negativo si se sobregiró). */
@@ -17,6 +19,10 @@ export interface CardSummary {
   nextCutoff: string;
   /** Estado de cuenta del último corte: lo que hay que pagar y hasta cuándo para no generar intereses. */
   statement: CardStatement;
+  /** Compras a meses vigentes de esta tarjeta. */
+  plans: InstallmentPlan[];
+  /** Deuda a meses que todavía no toca apartar (no cuenta como "sin respaldo"). */
+  deferred: number;
 }
 
 export interface CardStatement {
@@ -37,6 +43,7 @@ export const paymentDueSoon = (statement: CardStatement) => statement.amount > 0
 /**
  * Estado de cuenta del último corte. Los movimientos cancelados no cuentan; los
  * pagos cuentan hasta hoy (los anteriores al corte ya bajaron la deuda del corte).
+ * De una compra a meses solo cuentan las mensualidades cobradas hasta el corte.
  */
 export function cardStatement(account: Account & { card: CardSettings }, movements: readonly Movement[], reversed: Readonly<Record<string, string>>, today: string): CardStatement {
   const cutoff = lastCutoffOnOrBefore(today, account.card.cutoffDay);
@@ -45,7 +52,8 @@ export function cardStatement(account: Account & { card: CardSettings }, movemen
   let payments = 0;
   for (const movement of movements) {
     if (movement.kind === "reversal" || reversed[movement.id]) continue;
-    if (movement.kind === "expense" && movement.accountId === account.id && movement.date <= cutoff) charges += movement.amountMinor;
+    if (movement.kind === "expense" && movement.accountId === account.id && isInstallmentPurchase(movement)) charges += billedThrough(movement, account.card.cutoffDay, cutoff);
+    else if (movement.kind === "expense" && movement.accountId === account.id && movement.date <= cutoff) charges += movement.amountMinor;
     if (movement.kind === "cardPayment" && movement.toAccountId === account.id && movement.date <= today) payments += movement.amountMinor;
   }
   return { cutoff, due, amount: Math.max(0, charges - payments), daysLeft: differenceInCalendarDays(parseLocalDate(due), parseLocalDate(today)) };
@@ -57,6 +65,8 @@ export function cardStatement(account: Account & { card: CardSettings }, movemen
  */
 export function cardSummaries(accounts: readonly Account[], balances: Balances, movements: readonly Movement[], today: string): CardSummary[] {
   let borrowed = overdrawn(balances);
+  const plans = installmentPlans(accounts, movements, balances.reversed, today);
+  const deferred = deferredByCard(plans);
   return accounts
     .filter((account): account is Account & { card: CardSettings } => account.kind === "credit" && !account.archived && Boolean(account.card))
     .map((account) => {
@@ -69,9 +79,11 @@ export function cardSummaries(accounts: readonly Account[], balances: Balances, 
         account,
         debt,
         reserve,
-        unbacked: Math.max(0, debt - (available - lent)),
+        unbacked: Math.max(0, debt - (deferred[account.id] ?? 0) - (available - lent)),
         nextCutoff: statementPeriodFor(today, account.card.cutoffDay, account.card.paymentDays).cutoff,
         statement: cardStatement(account, movements, balances.reversed, today),
+        plans: plans.filter((plan) => plan.account.id === account.id),
+        deferred: deferred[account.id] ?? 0,
       };
     });
 }
@@ -100,4 +112,19 @@ export function checkSettings(settings: LedgerSettings, accounts: readonly Accou
 /** Ingresos recurrentes que tocan en `date` (para proponerlos al registrar). */
 export function incomesDueOn(settings: LedgerSettings, weekday: number): RecurringIncome[] {
   return settings.recurringIncome.filter((income) => income.weekday === weekday);
+}
+
+/** Apartar la próxima mensualidad desde el sobre de la compra hacia la reserva de su tarjeta. */
+export function installmentDraft(plan: InstallmentPlan, date: string): MovementDraft | null {
+  if (!plan.next) return null;
+  return {
+    kind: "assignment",
+    date,
+    concept: `Mensualidad ${plan.next.number} de ${plan.months}: ${plan.purchase.concept}`.slice(0, CONCEPT_MAX),
+    amountMinor: plan.next.amountMinor,
+    envelopeId: plan.purchase.envelopeId,
+    toEnvelopeId: plan.account.card.reserveEnvelopeId,
+    installmentOf: plan.purchase.id,
+    installmentNumber: plan.next.number,
+  };
 }

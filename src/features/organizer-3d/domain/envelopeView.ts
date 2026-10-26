@@ -1,4 +1,4 @@
-import type { Envelope, EnvelopeBudget, EnvelopeIcon, Movement } from "@/features/ledger/domain/types";
+import type { Account, Envelope, EnvelopeBudget, EnvelopeIcon, Movement } from "@/features/ledger/domain/types";
 import { toneFor } from "./envelopeStyle";
 
 export type { EnvelopeIcon };
@@ -32,17 +32,23 @@ export function toEnvelopeItem(envelope: Envelope, balanceMinor: number): Envelo
   };
 }
 
-/** En el inicio de cero, la reserva interna de tarjeta se muestra al usarla. */
+/**
+ * Sobres que se muestran en la carpeta. La reserva de una tarjeta aparece
+ * cuando la tarjeta se usa (o su reserva tiene dinero): una tarjeta recién
+ * agregada no llena la carpeta con un sobre vacío.
+ */
 export function visibleEnvelopes(
   active: readonly Envelope[],
-  all: readonly Envelope[],
+  accounts: readonly Account[],
   movements: readonly Movement[],
   balances: Readonly<Record<string, number>>,
 ): Envelope[] {
-  const minimalBook = !all.some((envelope) => ["savings", "cash", "week", "fund"].includes(envelope.id));
-  if (!minimalBook) return [...active];
-  const cardUsed = movements.some((movement) => movement.accountId === "visa" || movement.toAccountId === "visa" || movement.reserveEnvelopeId === "card");
-  return active.filter((envelope) => envelope.id !== "card" || cardUsed || (balances.card ?? 0) !== 0);
+  const unusedReserves = new Set(
+    accounts
+      .filter((account) => account.card && !movements.some((movement) => movement.accountId === account.id || movement.toAccountId === account.id || movement.reserveEnvelopeId === account.card?.reserveEnvelopeId || movement.toEnvelopeId === account.card?.reserveEnvelopeId))
+      .map((account) => account.card?.reserveEnvelopeId),
+  );
+  return active.filter((envelope) => !unusedReserves.has(envelope.id) || (balances[envelope.id] ?? 0) !== 0);
 }
 
 /** Sobre vecino en la lista (circular). Sin sobre activo, `1` da el primero y `-1` el último. */

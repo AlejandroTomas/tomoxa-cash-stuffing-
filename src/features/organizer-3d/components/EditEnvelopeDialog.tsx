@@ -16,6 +16,7 @@ import {
   CredenzaTitle,
 } from "@/components/ui/responsive-dialog";
 import { cn } from "@/lib/utils";
+import { filteredField, sanitizeAmountText } from "@/utils/numericInput";
 import {
   ENVELOPE_DESCRIPTION_MAX,
   ENVELOPE_ICON_OPTIONS,
@@ -259,7 +260,7 @@ function EditEnvelopeForm({
                 aria-invalid={Boolean(errors.budgetAmount)}
                 aria-describedby={errors.budgetAmount ? "envelope-budget-error" : "envelope-budget-hint"}
                 className="h-11 rounded-xl pl-7 tabular-nums"
-                {...register("budgetAmount")}
+                {...filteredField(register("budgetAmount"), sanitizeAmountText)}
               />
             </div>
             {errors.budgetAmount ? (

@@ -56,20 +56,32 @@ function draw(ctx: CanvasRenderingContext2D, doc: EnvelopeDocument) {
   ctx.font = `700 58px ${font}`;
   ctx.fillText(`${signOf(doc)}$ ${money.format(doc.amountMinor / 100)}`, 36, 215, WIDTH - 72);
 
-  // Cuerpo del ticket: renglones punteados y pie de demostración.
+  // Cuerpo del ticket: el detalle (de dónde salió, a dónde fue) en renglones punteados.
   ctx.strokeStyle = "#d8d3c8";
   ctx.lineWidth = 3;
-  ctx.setLineDash([10, 10]);
-  for (let y = 290; y < HEIGHT - 120; y += 58) {
-    ctx.beginPath();
-    ctx.moveTo(36, y);
-    ctx.lineTo(WIDTH - 36, y);
-    ctx.stroke();
+  let y = 262;
+  for (const detail of doc.details) {
+    if (y + 60 > HEIGHT - 30) break;
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = `500 22px ${font}`;
+    ctx.fillText(detail.label, 36, y + 14, WIDTH - 72);
+    ctx.fillStyle = "#2f3540";
+    ctx.font = `600 28px ${font}`;
+    ctx.fillText(detail.value, 36, y + 46, WIDTH - 72);
+    y += 76;
+    dottedLine(ctx, y - 10);
   }
+  // Sin detalle (o con espacio de sobra), renglones vacíos como un ticket en blanco.
+  for (y = Math.max(y + 48, 290); y < HEIGHT - 60; y += 58) dottedLine(ctx, y);
+}
+
+function dottedLine(ctx: CanvasRenderingContext2D, y: number) {
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(36, y);
+  ctx.lineTo(WIDTH - 36, y);
+  ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = "#9ca3af";
-  ctx.font = `500 24px ${font}`;
-  ctx.fillText("Movimiento de demostración", 36, HEIGHT - 60, WIDTH - 72);
 }
 
 /** Textura del ticket; se redibuja cuando cargan las fuentes de la app. */
