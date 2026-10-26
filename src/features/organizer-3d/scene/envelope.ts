@@ -6,6 +6,8 @@ import { ENVELOPE, labelScale, slotPose } from "./layout";
 import type { MaterialKit, PlasticOptions } from "./materials";
 
 export interface EnvelopePart {
+  /** Sobre de la carpeta o tarjeta del tarjetero (ver `walletCard.ts`). */
+  kind: "envelope" | "card";
   /** Se actualizan al reacomodar la carpeta (crear, archivar o reordenar sobres). */
   item: EnvelopeItem;
   index: number;
@@ -159,5 +161,5 @@ export function createEnvelope(item: EnvelopeItem, index: number, count: number,
     kit.release(...own());
   };
 
-  return { item, index, group, hover, mouth, setLayer, fitLabel, restyle, dispose };
+  return { kind: "envelope", item, index, group, hover, mouth, setLayer, fitLabel, restyle, dispose };
 }

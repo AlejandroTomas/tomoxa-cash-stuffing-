@@ -9,7 +9,8 @@ import { classifyGesture, TAP_SLOP } from "../domain/gestures";
 import { createCaptionTag, type CaptionTag } from "./captionTag";
 import { createDocumentDeck, type DeckLayout, type DeckPose, type DocumentDeck } from "./documentDeck";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
-import { BINDER, DOCUMENT, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, pocketClearance, slotPose as slotPoseOf, type DocumentPose, type SlotPose } from "./layout";
+import { BINDER, CARD, DOCUMENT, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, insidePose, pocketClearance, slotPose as slotPoseOf, WALLET, walletExit, walletSlot, type DocumentPose, type SlotPose, type WalletPose } from "./layout";
+import { createCardGeometries, createWalletCard, createWalletPockets } from "./walletCard";
 import { createMaterialKit } from "./materials";
 import { createStage } from "./stage";
 import type { OrganizerSceneApi, SafeArea, SceneIntent } from "./contract";
@@ -71,14 +72,19 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
   const binder = createBinder(kit);
   tilt.add(binder.group);
   const geometries = createEnvelopeGeometries();
+  const cardGeometries = createCardGeometries();
   // Los sobres llegan del libro con `setEnvelopes` (y se reacomodan si cambian).
+  // Las reservas de tarjeta no son sobres de la pila: son tarjetas en el tarjetero de la tapa.
   let parts: EnvelopePart[] = [];
+  let cards: EnvelopePart[] = [];
   let byId = new Map<EnvelopeId, EnvelopePart>();
   let envelopeTargets: THREE.Object3D[] = [];
   function indexParts() {
-    byId = new Map(parts.map((part) => [part.item.id, part]));
-    envelopeTargets = parts.map((part) => part.hover);
+    byId = new Map([...parts, ...cards].map((part) => [part.item.id, part]));
+    envelopeTargets = [...parts, ...cards].map((part) => part.hover);
   }
+  const pockets = createWalletPockets(kit, binder.coverPivot);
+  pockets.setCount(0);
   // Poses según cuántos sobres hay en la carpeta.
   const slotPose = (index: number, fanned = false) => slotPoseOf(index, fanned, parts.length);
   const coverShadowOpacity = kit.contactShadow.opacity;
@@ -158,6 +164,95 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   function restingLayers() {
     parts.forEach((part) => part.setLayer(10 + part.index * 5));
+    cards.forEach((card) => card.setLayer(10));
+  }
+
+  // ── Tarjetero ─────────────────────────────────────────────────────────────
+  const scratch = new THREE.Object3D();
+  const inverse = new THREE.Matrix4();
+
+  /** Pose del tarjetero (coordenadas de la tapa) expresada en coordenadas de la carpeta, con la tapa como está. */
+  function walletToBinder(pose: WalletPose) {
+    root.updateMatrixWorld(true);
+    binder.coverPivot.add(scratch);
+    scratch.position.set(pose.x, pose.y, pose.z);
+    scratch.rotation.set(0, Math.PI, 0);
+    scratch.scale.setScalar(WALLET.scale);
+    scratch.updateWorldMatrix(true, false);
+    const matrix = inverse.copy(binder.group.matrixWorld).invert().multiply(scratch.matrixWorld);
+    scratch.removeFromParent();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    matrix.decompose(position, quaternion, scale);
+    return { position, quaternion, scale: scale.x };
+  }
+
+  /**
+   * Lleva una pieza (ya en coordenadas de la carpeta) a una posición, giro y
+   * escala; el giro se interpola con cuaterniones (la tarjeta viene de la tapa
+   * volteada). `target` se calcula al empezar, con la carpeta como esté entonces.
+   */
+  function glide(tl: gsap.core.Timeline, part: EnvelopePart, target: () => { position: THREE.Vector3; quaternion: THREE.Quaternion; scale: number }, at: number, duration: number, ease: string) {
+    const from = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), scale: 1 };
+    let to = target();
+    const progress = { t: 0 };
+    tl.to(
+      progress,
+      {
+        t: 1,
+        duration,
+        ease,
+        onStart: () => {
+          from.position.copy(part.group.position);
+          from.quaternion.copy(part.group.quaternion);
+          from.scale = part.group.scale.x;
+          to = target();
+        },
+        onUpdate: () => {
+          part.group.position.lerpVectors(from.position, to.position, progress.t);
+          part.group.quaternion.slerpQuaternions(from.quaternion, to.quaternion, progress.t);
+          part.group.scale.setScalar(THREE.MathUtils.lerp(from.scale, to.scale, progress.t));
+        },
+      },
+      at,
+    );
+  }
+
+  /** Tarjeta a su bolsillo (o un poco más abajo, "guardada" del todo, si `sunk` > 0). */
+  function toWalletSlot(tl: gsap.core.Timeline, card: EnvelopePart, at: number, duration: number, ease = "power3.out", sunk = 0) {
+    const slot = walletSlot(card.index, cards.length);
+    tl.to(card.group.position, { x: slot.x, y: slot.y - sunk, z: slot.z, duration, ease }, at);
+  }
+
+  /** Saca la tarjeta de su bolsillo (en su plano) y la trae al frente. */
+  function presentCard(tl: gsap.core.Timeline, card: EnvelopePart, spot: { x: number; y: number; z: number; scale: number }) {
+    const exit = walletExit(card.index, cards.length);
+    tl.to(card.group.position, { y: exit.y, duration: d(0.45), ease: "power2.inOut" }, 0);
+    // Ya fuera del bolsillo deja de seguir a la tapa: pasa a la carpeta sin moverse en pantalla.
+    tl.call(() => void binder.group.attach(card.group), [], d(0.45));
+    const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(EXTRACTED.rx, EXTRACTED.ry, EXTRACTED.rz));
+    glide(tl, card, () => ({ position: new THREE.Vector3(spot.x, spot.y, spot.z), quaternion, scale: spot.scale }), d(0.46), d(0.75), "power3.out");
+  }
+
+  /** Regresa la tarjeta presentada: arriba de su bolsillo, de vuelta a la tapa y adentro. Devuelve cuándo termina. */
+  function returnCard(tl: gsap.core.Timeline, card: EnvelopePart, at: number): number {
+    const travel = d(0.65);
+    glide(tl, card, () => walletToBinder(walletExit(card.index, cards.length)), at, travel, "power2.inOut");
+    tl.call(
+      () => {
+        binder.coverPivot.attach(card.group);
+        const exit = walletExit(card.index, cards.length);
+        card.group.position.set(exit.x, exit.y, exit.z);
+        card.group.rotation.set(0, Math.PI, 0);
+        card.group.scale.setScalar(WALLET.scale);
+        restingLayers();
+      },
+      [],
+      at + travel,
+    );
+    toWalletSlot(tl, card, at + travel + d(0.02), d(0.4), "power2.out");
+    return at + travel + d(0.42);
   }
 
   /** Abre o cierra las anillas (la mitad móvil gira sobre su bisagra en la placa). */
@@ -225,6 +320,12 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       tl.to(rig, { ...rigFor("open", viewport()), duration: d(1.5), ease: "power2.inOut" }, d(0.3));
       // Libres de la tapa, los sobres se levantan en abanico, en cascada.
       parts.forEach((part) => toSlot(tl, part, d(1.0) + part.index * d(0.06), d(0.7), true, 0, "back.out(1.5)"));
+      // Las tarjetas asoman un poco de sus bolsillos y vuelven a acomodarse.
+      cards.forEach((card) => {
+        const slot = walletSlot(card.index, cards.length);
+        tl.to(card.group.position, { y: slot.y + 0.22, duration: d(0.25), ease: "power2.out" }, d(1.45) + card.index * d(0.07));
+        tl.to(card.group.position, { y: slot.y, duration: d(0.35), ease: "back.out(2)" }, d(1.7) + card.index * d(0.07));
+      });
     });
   }
 
@@ -240,7 +341,7 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     await play((tl) => {
       // Si el sobre estaba abierto: guarda los documentos y cierra la boca primero.
       const stowed = extracted && hadDocuments ? stowDocuments(tl, extracted, 0) : 0;
-      const start = extracted ? slideBack(tl, extracted, stowed, slotPose(extracted.index, true)) : 0;
+      const start = !extracted ? 0 : extracted.kind === "card" ? returnCard(tl, extracted, stowed) : slideBack(tl, extracted, stowed, slotPose(extracted.index, true));
       tl.call(() => restingLayers(), [], start);
       // Los sobres se acuestan antes de que baje la tapa.
       parts.forEach((part) => toSlot(tl, part, start + (parts.length - 1 - part.index) * d(0.04), d(0.5), false, 0, "power2.inOut"));
@@ -335,7 +436,9 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     const opened = deck;
     // Etiqueta de papel sobre el frente del sobre, un poco ladeada.
     caption = createCaptionTag(handwritingFont(), maxAnisotropy);
-    caption.mesh.position.set(-0.62, -0.6, 0.075);
+    // En la tarjeta cuelga por debajo, para no tapar lo apartado.
+    if (part.kind === "card") caption.mesh.position.set(-0.7, -CARD.height / 2 - 0.12, 0.06);
+    else caption.mesh.position.set(-0.62, -0.6, 0.075);
     caption.mesh.rotation.z = 0.05;
     caption.mesh.renderOrder = 260;
     caption.mesh.scale.setScalar(0.001);
@@ -343,6 +446,14 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     part.hover.add(caption.mesh);
     const tag = caption.mesh;
     await play((tl) => {
+      if (part.kind === "card") {
+        // La tarjeta sale de su bolsillo, viene al frente y los documentos asoman detrás de ella.
+        presentCard(tl, part, presentSpot());
+        opened.arrange(tl, d(1.05), d(0.05));
+        tl.to(tag.scale, { x: 1, y: 1, z: 1, duration: d(0.35), ease: "back.out(1.8)" }, d(1.1));
+        tl.call(() => writeCaption(phrase), [], d(1.3));
+        return;
+      }
       // 1) Sale del bolsillo hacia arriba, en su plano, hasta librar a los de enfrente.
       // 2) Viene al frente a esa altura mirando a la cámara. 3) Ya en su lugar abre
       // la boca y los documentos asoman en cascada.
@@ -378,9 +489,10 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     activeId = null;
     fanTimeline?.kill();
     await play((tl) => {
-      // Guarda los documentos, cierra la boca y el sobre vuelve a su bolsillo.
+      // Guarda los documentos, cierra la boca y el sobre (o la tarjeta) vuelve a su bolsillo.
       const end = stowDocuments(tl, part, 0);
-      slideBack(tl, part, end - d(0.1), slotPose(part.index, true));
+      if (part.kind === "card") returnCard(tl, part, end - d(0.1));
+      else slideBack(tl, part, end - d(0.1), slotPose(part.index, true));
     });
   }
 
@@ -511,11 +623,15 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
 
   async function setEnvelopes(items: readonly EnvelopeItem[]) {
     if (disposed) return;
-    const sameSet = items.length === parts.length && items.every((item, index) => parts[index].item.id === item.id);
-    if (sameSet) {
-      items.forEach((item, index) => {
-        parts[index].item = item;
-        parts[index].restyle(item);
+    const envelopeItems = items.filter((item) => !item.card);
+    const cardItems = items.filter((item) => item.card);
+    const same = (list: readonly EnvelopePart[], next: readonly EnvelopeItem[]) => next.length === list.length && next.every((item, index) => list[index].item.id === item.id);
+    if (same(parts, envelopeItems) && same(cards, cardItems)) {
+      [...parts, ...cards].forEach((part) => {
+        const item = items.find((candidate) => candidate.id === part.item.id);
+        if (!item) return;
+        part.item = item;
+        part.restyle(item);
       });
       wake(800);
       return;
@@ -526,32 +642,56 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
       return;
     }
     pendingItems = null;
-    const previous = new Map(parts.map((part) => [part.item.id, part]));
-    const next = items.map((item, index) => {
+    const previous = new Map([...parts, ...cards].map((part) => [part.item.id, part]));
+    const reuse = (item: EnvelopeItem, index: number) => {
       const existing = previous.get(item.id);
-      if (existing) {
-        previous.delete(item.id);
-        existing.index = index;
-        existing.item = item;
-        existing.restyle(item);
-        existing.fitLabel(items.length);
+      if (!existing) return null;
+      previous.delete(item.id);
+      existing.index = index;
+      existing.item = item;
+      existing.restyle(item);
+      return existing;
+    };
+    const next = envelopeItems.map((item, index) => {
+      const existing = reuse(item, index);
+      if (existing && existing.kind === "envelope") {
+        existing.fitLabel(envelopeItems.length);
         return existing;
       }
-      const created = createEnvelope(item, index, items.length, kit, geometries, maxAnisotropy);
+      if (existing) previous.set(item.id, existing);
+      const created = createEnvelope(item, index, envelopeItems.length, kit, geometries, maxAnisotropy);
       created.group.scale.setScalar(0.001);
       binder.group.add(created.group);
       return created;
     });
+    const addedCards: EnvelopePart[] = [];
+    const nextCards = cardItems.map((item, index) => {
+      const existing = reuse(item, index);
+      if (existing && existing.kind === "card") return existing;
+      if (existing) previous.set(item.id, existing);
+      const created = createWalletCard(item, index, cardItems.length, kit, cardGeometries, maxAnisotropy);
+      // Nace guardada en su bolsillo y sube a su lugar.
+      created.group.position.y -= 1.2;
+      binder.coverPivot.add(created.group);
+      addedCards.push(created);
+      return created;
+    });
     const removed = [...previous.values()];
     parts = next;
+    cards = nextCards;
     indexParts();
     restingLayers();
+    pockets.setCount(cards.length);
     const fanned = stage !== "closed";
     await play((tl) => {
-      // Los que se van se encogen; los nuevos crecen en su lugar; todos se reacomodan.
-      removed.forEach((part) => tl.to(part.group.scale, { x: 0.001, y: 0.001, z: 0.001, duration: d(0.3), ease: "power2.in" }, 0));
-      tl.call(() => removed.forEach((part) => part.dispose()), [], d(0.32));
+      // Los que se van se encogen (las tarjetas se hunden en su bolsillo); los nuevos crecen en su lugar; todos se reacomodan.
+      removed.forEach((part) => {
+        if (part.kind === "card") tl.to(part.group.position, { y: part.group.position.y - 1.2, duration: d(0.3), ease: "power2.in" }, 0);
+        tl.to(part.group.scale, { x: 0.001, y: 0.001, z: 0.001, duration: d(0.3), ease: "power2.in" }, part.kind === "card" ? d(0.2) : 0);
+      });
+      tl.call(() => removed.forEach((part) => part.dispose()), [], d(0.52));
       parts.forEach((part) => toPose(tl, part, slotPose(part.index, fanned), d(0.12) + part.index * d(0.03), d(0.55), "back.out(1.3)"));
+      cards.forEach((card) => toWalletSlot(tl, card, d(0.12) + card.index * d(0.05) + (addedCards.includes(card) ? d(0.2) : 0), d(0.6), "back.out(1.4)"));
     });
   }
 
@@ -584,7 +724,8 @@ export function createOrganizerScene(mount: HTMLElement): OrganizerSceneApi {
     if (next === hovered) return;
     ctx.add(() => {
       if (hovered) gsap.to(hovered.hover.position, { y: 0, duration: d(0.3), ease: "power2.out" });
-      if (next) gsap.to(next.hover.position, { y: 0.08, duration: d(0.3), ease: "power2.out" });
+      // La tarjeta asoma más de su bolsillo; el sobre apenas se levanta.
+      if (next) gsap.to(next.hover.position, { y: next.kind === "card" ? 0.24 : 0.08, duration: d(0.3), ease: "power2.out" });
     });
     hovered = next;
     markDirty(400);

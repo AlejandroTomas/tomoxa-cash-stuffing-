@@ -9,7 +9,7 @@ import { useAppDispatch, useAppSelector } from "@/hooks/useReduxHooks";
 import { toLocalIsoDate } from "@/utils/localDate";
 import { documentsFromLedger, summarizeActivity } from "../domain/document";
 import { toneFor, type EnvelopeStyle } from "../domain/envelopeStyle";
-import { toEnvelopeItem, visibleEnvelopes, type EnvelopeId, type EnvelopeItem } from "../domain/envelopeView";
+import { cardFaces, toEnvelopeItem, visibleEnvelopes, type EnvelopeId, type EnvelopeItem } from "../domain/envelopeView";
 
 /**
  * El libro (feature `ledger`) visto por el organizador: sobres activos con su
@@ -32,11 +32,12 @@ export function useLedgerData() {
     if (!loaded) void dispatch(loadLedger());
   }, [dispatch, loaded]);
 
-  const envelopes: EnvelopeItem[] = useMemo(
-    () => visibleEnvelopes(activeEnvelopes, accounts, movements, balances.envelopes)
-      .map((envelope) => toEnvelopeItem(envelope, balances.envelopes[envelope.id] ?? 0)),
-    [activeEnvelopes, accounts, balances, movements],
-  );
+  const envelopes: EnvelopeItem[] = useMemo(() => {
+    const cards = cardFaces(accounts, balances.debt);
+    return visibleEnvelopes(activeEnvelopes).map((envelope) =>
+      toEnvelopeItem(envelope, balances.envelopes[envelope.id] ?? 0, cards.get(envelope.id)),
+    );
+  }, [activeEnvelopes, accounts, balances]);
 
   /** Saldo (centavos) de cada sobre activo. */
   const balanceOf = useCallback((id: EnvelopeId) => balances.envelopes[id] ?? 0, [balances]);

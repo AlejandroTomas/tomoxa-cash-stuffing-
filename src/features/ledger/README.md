@@ -34,8 +34,8 @@ curso. Se avisa en la nav cuando faltan `PAYMENT_REMINDER_DAYS` (5) días o meno
 
 **Cuentas** (`accounts`): varias de débito, efectivo y tarjetas. Cada tarjeta nueva
 crea su propio sobre de reserva (con el nombre de la tarjeta); se archiva junto con
-ella y solo si no hay deuda ni reserva. La reserva de una tarjeta sin usar no se
-muestra en la carpeta, pero cuenta para el límite de 8 sobres.
+ella y solo si no hay deuda ni reserva. En la carpeta la reserva se ve como una
+tarjeta en el tarjetero (ver `organizer-3d/README.md`); cuenta para el límite de 8 sobres.
 
 **Pago dividido** (`splitId`): un gasto pagado con varias formas son varios `expense`
 (uno por cuenta) con el mismo `splitId`; se guardan juntos y se cancelan juntos.
@@ -87,8 +87,8 @@ components/    RecordMovementDialog (gasto —dividido o a meses—, ingreso, pa
   movimiento se vuelve a aplicar en orden con `checkMovement`. Nunca se importa a medias.
 - La primera vez se elige entre comenzar de cero o explorar el ejemplo. De cero se
   guardan solo los destinos internos `Disponible` y `Tarjeta`, sin movimientos,
-  presupuestos ni ingresos recurrentes. El organizador muestra solo `Disponible`;
-  la reserva de tarjeta aparece cuando se usa y se pueden crear sobres propios.
+  presupuestos ni ingresos recurrentes. El organizador muestra `Disponible` y la
+  tarjeta (en la carpeta, en su tarjetero); se pueden crear sobres propios.
 - Cuentas → Ajustes permite reiniciar el libro de cero o volver al ejemplo. Ambas
   opciones reemplazan el libro completo de este dispositivo.
 

@@ -2,11 +2,14 @@ import * as THREE from "three";
 import type { EnvelopeDocument } from "../domain/document";
 import type { EnvelopeId, EnvelopeItem } from "../domain/envelopeView";
 import type { OrganizerSceneApi, SceneIntent } from "./contract";
+import { createCardStand } from "./cardStand";
+import { cardDeck, mergeFrames, standAjar, standExitPath, standFrame, standPresentFrame, standRest } from "./cardStandLayout";
 import { createDocumentDeck, type DeckLayout, type DocumentDeck } from "./documentDeck";
 import { DOCUMENT } from "./layout";
 import { createMoneyTokens, type MoneyTokens } from "./moneyTokens";
 import { createSceneRuntime, type SceneRuntime } from "./runtime";
-import { facing, type FrameTarget, type Pose, type SlotModel, type SlotPart, type Vec3 } from "./slotModel";
+import { facing, type FrameKind, type FrameTarget, type Pose, type SlotDeck, type SlotModel, type SlotPart, type Vec3 } from "./slotModel";
+import { createCardGeometries } from "./walletCard";
 
 type SceneStage = "closed" | "open" | "browsing" | "reading";
 
@@ -30,10 +33,19 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
   }
   const { root, d } = runtime;
   root.add(model.group);
+  // Tarjetas de crédito: de pie en un tarjetero de escritorio junto al organizador.
+  const cardGeometries = createCardGeometries();
+  const stand = createCardStand(runtime.kit, model.stand.finish, cardGeometries, runtime.maxAnisotropy);
+  const cardsLayer = new THREE.Group();
+  cardsLayer.add(stand.group);
+  root.add(cardsLayer);
+  const CARD_DECK: SlotDeck = cardDeck();
+  const CARD_HOVER: Vec3 = { x: 0, y: 0.22, z: 0 };
 
   let stage: SceneStage = "closed";
   let activeId: EnvelopeId | null = null;
   let parts: SlotPart[] = [];
+  let cards: SlotPart[] = [];
   let byId = new Map<EnvelopeId, SlotPart>();
   let targets: THREE.Object3D[] = [];
   let pendingItems: readonly EnvelopeItem[] | null = null;
@@ -45,27 +57,46 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
 
   const count = () => Math.max(1, parts.length);
   function indexParts() {
-    byId = new Map(parts.map((part) => [part.item.id, part]));
-    targets = [model.group];
+    byId = new Map([...parts, ...cards].map((part) => [part.item.id, part]));
+    targets = [model.group, cardsLayer];
+  }
+  const all = () => [...parts, ...cards];
+
+  // Poses y documentos según sea pieza del organizador o tarjeta del tarjetero.
+  const placement = () => model.stand.placement(count(), cards.length);
+  const restOf = (part: SlotPart) => (part.kind === "card" ? standRest(part.index, cards.length, placement()) : model.rest(part.index, count()));
+  const ajarOf = (part: SlotPart) => (part.kind === "card" ? standAjar(part.index, cards.length, placement()) : model.ajar(part.index, count()));
+  const exitOf = (part: SlotPart) =>
+    part.kind === "card" ? standExitPath(part.index, cards.length, placement(), viewDir, model.stand.reach(count())) : model.exitPath(part.index, count());
+  const deckOf = (part: SlotPart) => (part.kind === "card" ? CARD_DECK : model.deck);
+  const hoverOf = (part: SlotPart) => (part.kind === "card" ? CARD_HOVER : model.hoverOffset);
+  /** Encuadre del organizador sumándole el tarjetero (si hay tarjetas). */
+  function frameOf(kind: FrameKind): FrameTarget {
+    const base = model.frame(kind, count());
+    if (!cards.length) return base;
+    const box = standFrame(cards.length, placement(), viewDir);
+    const margin = kind === "overview" ? 1.35 : 1.2;
+    return mergeFrames(base, { ...box, width: box.width * margin, height: box.height * margin }, viewDir);
   }
 
   // ── Encuadres ─────────────────────────────────────────────────────────────
-  const openFrame = () => model.frame("open", count());
+  const openFrame = () => frameOf("open");
   /** Con la pieza presentada: su encuadre, crecido hacia arriba para el documento que cruza por encima (casi entero). */
   const presentFrame = (part: SlotPart): FrameTarget => {
-    const frame = model.presentFrame(part.index, count());
-    const path = model.exitPath(part.index, count());
+    const frame = part.kind === "card" ? standPresentFrame(cards.length, placement(), viewDir, model.stand.reach(count())) : model.presentFrame(part.index, count());
+    const path = exitOf(part);
     const present = path[path.length - 1];
-    const card = model.deck.shown(0, 1);
+    const deckLayoutOf = deckOf(part);
+    const card = deckLayoutOf.shown(0, 1);
     // Hasta un poco arriba del centro del que cruza: es un instante y así la vista normal queda más cerca.
-    const travelTop = present.y + (model.deck.travelY + (DOCUMENT.height / 4) * card.scale) * present.scale;
+    const travelTop = present.y + (deckLayoutOf.travelY + (DOCUMENT.height / 4) * card.scale) * present.scale;
     const bottom = frame.center.y - frame.height / 2;
     const top = Math.max(frame.center.y + frame.height / 2, travelTop);
     return { ...frame, center: { ...frame.center, y: (top + bottom) / 2 }, height: top - bottom };
   };
   const frameNow = (): FrameTarget => {
     const part = activeId ? byId.get(activeId) : undefined;
-    if (stage === "closed") return model.frame("overview", count());
+    if (stage === "closed") return frameOf("overview");
     if (part && isOut(stage)) return presentFrame(part);
     return openFrame();
   };
@@ -104,9 +135,9 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     await runtime.play((tl) => {
       runtime.cameraTo(tl, openFrame, 0, d(1.2));
       // Saludo: cada pieza asoma y vuelve, en cascada (se ve que se pueden sacar).
-      const offset = model.hoverOffset;
-      parts.forEach((part) => {
-        const at = d(0.35) + part.index * d(0.07);
+      all().forEach((part, order) => {
+        const offset = hoverOf(part);
+        const at = d(0.35) + order * d(0.07);
         tl.to(part.hover.position, { x: offset.x * 1.6, y: offset.y * 1.6, z: offset.z * 1.6, duration: d(0.28), ease: "power2.out" }, at);
         tl.to(part.hover.position, { x: 0, y: 0, z: 0, duration: d(0.45), ease: "back.out(2)" }, at + d(0.28));
       });
@@ -123,15 +154,15 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     await runtime.play((tl) => {
       const stowed = part && wasOut ? stowDeck(tl, 0) : 0;
       const start = part && wasOut ? returnAlongPath(tl, part, stowed) : 0;
-      parts.forEach((each) => toPose(tl, each, model.rest(each.index, count()), start, d(0.5), "power2.inOut"));
-      runtime.cameraTo(tl, () => model.frame("overview", count()), start, d(1.1));
+      all().forEach((each) => toPose(tl, each, restOf(each), start, d(0.5), "power2.inOut"));
+      runtime.cameraTo(tl, () => frameOf("overview"), start, d(1.1));
     });
   }
 
   /** Regresa por el mismo camino por el que salió, hasta su lugar. Devuelve cuándo termina. */
   function returnAlongPath(tl: gsap.core.Timeline, part: SlotPart, at: number): number {
-    const path = model.exitPath(part.index, count());
-    const back = [...path.slice(0, -1).reverse(), model.rest(part.index, count())];
+    const path = exitOf(part);
+    const back = [...path.slice(0, -1).reverse(), restOf(part)];
     const durations = back.length > 2 ? [0.6, 0.45, 0.5] : [0.6, 0.55];
     return followPath(tl, part, back, at, durations);
   }
@@ -141,7 +172,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
    * la cámara: el de la cámara menos el de la pieza.
    */
   function readingRotation(part: SlotPart): { rx: number; ry: number; rz: number } {
-    const path = model.exitPath(part.index, count());
+    const path = exitOf(part);
     const present = path[path.length - 1];
     const face = facing(viewDir);
     const pieceTurn = new THREE.Quaternion().setFromEuler(new THREE.Euler(present.rx, present.ry, present.rz, "YXZ"));
@@ -151,7 +182,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
   }
 
   function deckLayout(part: SlotPart): DeckLayout {
-    const { reading, ...layout } = model.deck;
+    const { reading, ...layout } = deckOf(part);
     return { ...layout, reading: { ...reading, ...readingRotation(part) } };
   }
 
@@ -185,7 +216,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     const opened = deck;
     await runtime.play((tl) => {
       settleHover(tl, part, 0);
-      const path = model.exitPath(part.index, count());
+      const path = exitOf(part);
       const durations = path.length > 2 ? [0.5, 0.45, 0.75] : [0.6, 0.8];
       const end = followPath(tl, part, path, 0, durations);
       runtime.cameraTo(tl, () => presentFrame(part), end * 0.3, Math.max(d(0.5), end * 0.75));
@@ -236,7 +267,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
   function mouthWhenOpen(part: SlotPart): THREE.Vector3 {
     const { position, rotation, scale } = part.group;
     const saved = { position: position.clone(), rotation: rotation.clone(), scale: scale.clone() };
-    setPose(part, model.ajar(part.index, count()));
+    setPose(part, ajarOf(part));
     part.group.updateMatrixWorld(true);
     const point = part.mouth(new THREE.Vector3());
     position.copy(saved.position);
@@ -271,14 +302,14 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
     await runtime.play((tl) => {
       // Origen y destino salen a la vez; cada uno vuelve en cuanto termina su parte.
       if (from) {
-        toPose(tl, from, model.ajar(from.index, count()), 0, opening, "power2.out");
-        toPose(tl, from, model.rest(from.index, count()), opening + flight * 0.55, d(0.5), "power2.inOut");
+        toPose(tl, from, ajarOf(from), 0, opening, "power2.out");
+        toPose(tl, from, restOf(from), opening + flight * 0.55, d(0.5), "power2.inOut");
       }
       if (to) {
-        toPose(tl, to, model.ajar(to.index, count()), 0, opening, "power2.out");
+        toPose(tl, to, ajarOf(to), 0, opening, "power2.out");
         tl.to(to.hover.position, { x: 0, y: -0.04, z: 0, duration: d(0.12), ease: "power2.in" }, arrival);
         tl.to(to.hover.position, { y: 0, duration: d(0.3), ease: "back.out(2)" }, arrival + d(0.12));
-        toPose(tl, to, model.rest(to.index, count()), arrival + d(0.25), d(0.5), "power2.inOut");
+        toPose(tl, to, restOf(to), arrival + d(0.25), d(0.5), "power2.inOut");
       }
       tokens.meshes.forEach((mesh, i) => {
         const progress = { t: 0 };
@@ -317,11 +348,15 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
 
   async function setEnvelopes(items: readonly EnvelopeItem[]) {
     if (runtime.isDisposed()) return;
-    const sameSet = items.length === parts.length && items.every((item, index) => parts[index].item.id === item.id);
-    if (sameSet) {
-      items.forEach((item, index) => {
-        parts[index].item = item;
-        parts[index].restyle(item);
+    const pieceItems = items.filter((item) => !item.card);
+    const cardItems = items.filter((item) => item.card);
+    const same = (list: readonly SlotPart[], next: readonly EnvelopeItem[]) => next.length === list.length && next.every((item, index) => list[index].item.id === item.id);
+    if (same(parts, pieceItems) && same(cards, cardItems)) {
+      all().forEach((part) => {
+        const item = items.find((candidate) => candidate.id === part.item.id);
+        if (!item) return;
+        part.item = item;
+        part.restyle(item);
       });
       runtime.wake(800);
       return;
@@ -332,27 +367,45 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
       return;
     }
     pendingItems = null;
-    const first = parts.length === 0;
-    model.resize(items.length);
-    const previous = new Map(parts.map((part) => [part.item.id, part]));
-    const next = items.map((item, index) => {
+    const first = parts.length === 0 && cards.length === 0;
+    model.resize(pieceItems.length);
+    const previous = new Map(all().map((part) => [part.item.id, part]));
+    const reuse = (item: EnvelopeItem, index: number, isCard: boolean) => {
       const existing = previous.get(item.id);
-      if (existing) {
-        previous.delete(item.id);
-        existing.index = index;
-        existing.item = item;
-        existing.restyle(item);
-        return existing;
-      }
-      const created = model.createPart(item, index, items.length);
-      setPose(created, model.rest(index, items.length));
-      if (!first) created.group.scale.setScalar(0.001);
-      model.group.add(created.group);
-      return created;
+      if (!existing || (existing.kind === "card") !== isCard) return null;
+      previous.delete(item.id);
+      existing.index = index;
+      existing.item = item;
+      existing.restyle(item);
+      return existing;
+    };
+    const created: SlotPart[] = [];
+    const nextParts = pieceItems.map((item, index) => {
+      const existing = reuse(item, index, false);
+      if (existing) return existing;
+      const part = model.createPart(item, index, pieceItems.length);
+      model.group.add(part.group);
+      created.push(part);
+      return part;
+    });
+    const nextCards = cardItems.map((item, index) => {
+      const existing = reuse(item, index, true);
+      if (existing) return existing;
+      const part = stand.createCard(item, index);
+      cardsLayer.add(part.group);
+      created.push(part);
+      return part;
     });
     const removed = [...previous.values()];
-    parts = next;
+    parts = nextParts;
+    cards = nextCards;
     indexParts();
+    stand.resize(cards.length, placement());
+    // Las nuevas nacen en su lugar (crecen desde ahí si no es la primera carga).
+    created.forEach((part) => {
+      setPose(part, restOf(part));
+      if (!first) part.group.scale.setScalar(0.001);
+    });
     if (first) {
       runtime.setFraming(frameNow);
       return;
@@ -361,7 +414,7 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
       // Las que se van se encogen; las nuevas crecen en su lugar; todas se reacomodan.
       removed.forEach((part) => tl.to(part.group.scale, { x: 0.001, y: 0.001, z: 0.001, duration: d(0.3), ease: "power2.in" }, 0));
       tl.call(() => removed.forEach((part) => part.dispose()), [], d(0.32));
-      parts.forEach((part) => toPose(tl, part, model.rest(part.index, count()), d(0.12) + part.index * d(0.03), d(0.55), "back.out(1.3)"));
+      all().forEach((part, order) => toPose(tl, part, restOf(part), d(0.12) + order * d(0.03), d(0.55), "back.out(1.3)"));
       runtime.cameraTo(tl, frameNow, 0, d(0.7));
     });
   }
@@ -378,9 +431,11 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
   };
   function setHover(next: SlotPart | null) {
     if (next === hovered) return;
-    const offset = model.hoverOffset;
     if (hovered) runtime.tween(hovered.hover.position, { x: 0, y: 0, z: 0, duration: d(0.3), ease: "power2.out" });
-    if (next) runtime.tween(next.hover.position, { x: offset.x, y: offset.y, z: offset.z, duration: d(0.3), ease: "power2.out" });
+    if (next) {
+      const offset = hoverOf(next);
+      runtime.tween(next.hover.position, { x: offset.x, y: offset.y, z: offset.z, duration: d(0.3), ease: "power2.out" });
+    }
     hovered = next;
     runtime.markDirty(400);
   }
@@ -446,8 +501,12 @@ export function createSlotScene(mount: HTMLElement, viewDir: Vec3, buildModel: (
       flyingTokens = null;
       deck?.dispose();
       deck = null;
-      parts.forEach((part) => part.dispose());
+      all().forEach((part) => part.dispose());
       parts = [];
+      cards = [];
+      stand.dispose();
+      cardsLayer.removeFromParent();
+      Object.values(cardGeometries).forEach((geometry) => geometry.dispose());
       model.dispose();
       runtime.dispose();
     },

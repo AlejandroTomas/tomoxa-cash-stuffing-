@@ -1,8 +1,8 @@
 # organizer-3d — Ahorroxa
 
 Al abrir la app por primera vez, `WelcomeDialog` pide elegir entre empezar de
-cero, datos de ejemplo o importar un respaldo. Al empezar de cero solo se muestra
-`Disponible`; la reserva de tarjeta aparece al usarla.
+cero, datos de ejemplo o importar un respaldo. Al empezar de cero se muestran
+`Disponible` y la tarjeta (en el tarjetero de la carpeta).
 
 Página de inicio (`/`; `/organizer` redirige ahí): un organizador 3D con sobres
 extraíbles (hasta 8) y una interfaz de vidrio encima. Tres estilos, con los mismos
@@ -50,6 +50,8 @@ scene/                         Three.js directo, sin React
   files/                       Archivador: filesLayout (medidas y poses, puro) · filesModel (mallas)
   stage.ts                     Renderer, luces, entorno procedural (RoomEnvironment), sombras
   binder.ts · envelope.ts      Carpeta (lomo, anillas, correa, banda, hojas) y sobres (bolsa esmerilada, pestañas)
+  walletCard.ts                Tarjetero de la tapa: tarjetas de crédito (cara impresa en canvas) y bolsillos de cuero
+  cardStand.ts · cardStandLayout.ts  Tarjetero de escritorio de la cajonera y el archivador (base y poses)
   materials.ts · labels.ts     Materiales compartidos (un dueño, se liberan juntos) y etiquetas en canvas
   documents.ts · documentTexture.ts  Tickets del sobre abierto (se crean al abrir, se liberan al cerrar)
   captionTag.ts                Etiqueta de papel con la frase de búsqueda, escrita en la escena
@@ -82,6 +84,34 @@ scene/                         Three.js directo, sin React
   ambos temas. El resto usa tokens; el coral de marca es `--primary` en `globals.css`.
 - `prefers-reduced-motion`: duraciones en 0, sin flotación ni paralaje. Sin WebGL: aviso y
   la fila de sobres + tarjeta siguen funcionando.
+
+## Tarjetero (carpeta)
+
+En la carpeta, la reserva de cada tarjeta de crédito no es un sobre de la pila: es
+una **tarjeta** en el tarjetero del interior de la tapa delantera (lado izquierdo con
+la carpeta abierta), como en una cartera. `EnvelopeItem.card` (nombre y deuda) la
+marca; la cara impresa muestra lo apartado y lo que se debe.
+
+- Bolsillos escalonados (`WALLET`, `walletSlot`, `pocketRect` en `layout.ts`): de cada
+  tarjeta asoma su franja superior y el bolsillo de abajo va delante del de arriba.
+  Siempre hay al menos tres bolsillos. Las tarjetas cuelgan de la bisagra de la tapa:
+  abren y cierran con ella sin tocar los sobres.
+- Hover: la tarjeta asoma de su bolsillo. Al abrir la carpeta, asoman en cascada.
+- Tocarla: sube en su plano hasta salir del bolsillo (`walletExit`), pasa de la tapa a
+  la carpeta sin saltar en pantalla (`attach`) y viene al frente girando con
+  cuaterniones (sale de la tapa volteada). Los documentos asoman por detrás de la
+  tarjeta y la etiqueta escrita cuelga debajo. Al regresar hace el camino inverso.
+- Mover dinero y registrar animan las fichas hacia la tarjeta igual que a un sobre.
+- Cajonera y archivador: **tarjetero de escritorio** a la izquierda del organizador
+  (`cardStand.ts`, medidas y poses en `cardStandLayout.ts`): base escalonada, laca
+  con canto champán en la cajonera y acrílico en el archivador. Las tarjetas van de
+  pie, una detrás de otra y cada una más alta, así asoma la parte de arriba de todas.
+  Tocarla: sube hasta librar a las de atrás y viene al frente; los documentos asoman
+  por detrás de su borde (recortados bajo el borde) y regresa por el mismo camino.
+  Las poses salen de `standRest/standAjar/standExitPath`; la escena de ranuras
+  (`slotScene`) las usa en lugar de las del modelo cuando la pieza es una tarjeta, y
+  el encuadre suma el tarjetero al del organizador (`mergeFrames`). Cada modelo dice
+  dónde va (`SlotModel.stand`).
 
 ## Estilos: carpeta, cajonera y archivador
 

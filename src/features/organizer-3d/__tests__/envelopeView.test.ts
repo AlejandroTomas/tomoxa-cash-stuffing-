@@ -1,31 +1,21 @@
 import { computeBalances } from "@/features/ledger/domain/balances";
-import { seedMovements, startingData } from "@/features/ledger/domain/seed";
-import { visibleEnvelopes } from "../domain/envelopeView";
+import { startingData } from "@/features/ledger/domain/seed";
+import { cardFaces, visibleEnvelopes } from "../domain/envelopeView";
 
 describe("sobres visibles en el organizador", () => {
-  it("al empezar de cero solo muestra Disponible y permite registrar ingresos", () => {
+  it("al empezar de cero muestra Disponible y la tarjeta (en el tarjetero de la carpeta)", () => {
     const data = startingData("empty");
-    expect(visibleEnvelopes(data.envelopes, data.accounts, data.movements, computeBalances(data).envelopes).map((envelope) => envelope.id)).toEqual(["available"]);
+    expect(visibleEnvelopes(data.envelopes).map((envelope) => envelope.id)).toEqual(["available", "card"]);
   });
 
   it("al elegir el ejemplo muestra sus seis sobres", () => {
-    const data = startingData("sample");
-    expect(visibleEnvelopes(data.envelopes, data.accounts, data.movements, computeBalances(data).envelopes)).toHaveLength(6);
+    expect(visibleEnvelopes(startingData("sample").envelopes)).toHaveLength(6);
   });
 
-  it("muestra Tarjeta cuando ya se usa la reserva", () => {
-    const data = startingData("empty");
-    const movements = [seedMovements().find((movement) => movement.accountId === "visa")!];
-    expect(visibleEnvelopes(data.envelopes, data.accounts, movements, {}).map((envelope) => envelope.id)).toEqual(["available", "card"]);
-  });
-
-  it("una tarjeta nueva no muestra su reserva hasta usarla", () => {
+  it("las reservas de tarjeta llevan la cara de su tarjeta (nombre y deuda)", () => {
     const data = startingData("sample");
-    const accounts = [...data.accounts, { id: "nu", name: "Nu", kind: "credit" as const, archived: false, card: { cutoffDay: 5, paymentDays: 20, reserveEnvelopeId: "nu-reserve" } }];
-    const envelopes = [...data.envelopes, { id: "nu-reserve", name: "Nu", description: "", color: "#ee8586", icon: "card" as const, order: 9, archived: false }];
-    const ids = (movements: typeof data.movements) => visibleEnvelopes(envelopes, accounts, movements, {}).map((envelope) => envelope.id);
-    expect(ids(data.movements)).not.toContain("nu-reserve");
-    const purchase = { ...data.movements[0], id: "x", kind: "expense" as const, accountId: "nu", reserveEnvelopeId: "nu-reserve" };
-    expect(ids([...data.movements, purchase])).toContain("nu-reserve");
+    const faces = cardFaces(data.accounts, computeBalances(data).debt);
+    expect(faces.get("card")).toEqual({ name: "Tarjeta de crédito", debt: computeBalances(data).debt.visa / 100 });
+    expect(faces.has("available")).toBe(false);
   });
 });

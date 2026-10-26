@@ -1,5 +1,5 @@
 import { fitDistance, fovFor, frameFor, freeNdc, outsideNdc, presentDepth, rigFor, subFov, WIDE_ASPECT, type Viewport } from "../scene/framing";
-import { BINDER, DOCUMENT, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, fanTop, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, slotPose, stackLayout } from "../scene/layout";
+import { BINDER, CARD, DOCUMENT, DOCUMENT_TRAVEL_Y, ENVELOPE, fanPose, fanTop, insidePose, labelScale, POCKET_CLEARANCE, pocketClearance, RINGS, pocketRect, slotPose, stackLayout, WALLET, walletExit, walletSlot } from "../scene/layout";
 
 const vp = (aspect: number): Viewport => ({ aspect, fov: fovFor(aspect) });
 
@@ -200,5 +200,39 @@ describe("documentos que salen y regresan", () => {
   it("cruzan con su borde inferior por encima de la boca del sobre", () => expect(bottom).toBeGreaterThan(ENVELOPE.height / 2));
   it("cruzan por encima de la punta de todos los demás (nadie más se mueve)", () => {
     for (let count = 1; count <= DOCUMENT.maxFan; count++) expect(bottom).toBeGreaterThan(fanTop(count));
+  });
+});
+
+describe("tarjetero", () => {
+  it("las tarjetas asoman escalonadas y cada una queda detrás de su bolsillo y delante del de arriba", () => {
+    for (const count of [1, 3, 5, 7]) {
+      for (let index = 0; index < count; index++) {
+        const card = walletSlot(index, count);
+        const pocket = pocketRect(index, count);
+        // El bolsillo tapa la parte baja de su tarjeta y llega al fondo.
+        expect(pocket.z).toBeLessThan(card.z);
+        expect(pocket.y - pocket.height / 2).toBeLessThanOrEqual(card.y - (CARD.height * WALLET.scale) / 2);
+        if (index > 0) {
+          const above = pocketRect(index - 1, count);
+          // La tarjeta va delante del bolsillo de arriba (más cerca de la cámara = Z menor), sin tocarlo.
+          expect(card.z + CARD.depth / 2).toBeLessThan(above.z - WALLET.pocketDepth / 2);
+        }
+      }
+      // Ninguna tarjeta se sale por abajo del tarjetero.
+      const last = walletSlot(count - 1, count);
+      expect(last.y - (CARD.height * WALLET.scale) / 2).toBeGreaterThan(WALLET.bottomY);
+    }
+  });
+
+  it("al salir, el borde inferior de la tarjeta libra su bolsillo", () => {
+    const exit = walletExit(2, 4);
+    expect(exit.y - (CARD.height * WALLET.scale) / 2).toBeGreaterThan(pocketRect(2, 4).y + pocketRect(2, 4).height / 2);
+  });
+
+  it("el tarjetero cabe en la tapa", () => {
+    const pocket = pocketRect(0, 3);
+    expect(pocket.x - pocket.width / 2).toBeGreaterThan(0.9); // libra la banda porta pluma
+    expect(pocket.x + pocket.width / 2).toBeLessThan(BINDER.width - 0.15);
+    expect(WALLET.topY).toBeLessThan(BINDER.height / 2 - 0.2);
   });
 });

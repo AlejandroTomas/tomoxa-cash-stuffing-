@@ -35,6 +35,8 @@ export interface FrameTarget {
 export type FrameKind = "overview" | "open";
 
 export interface SlotPart {
+  /** Tarjeta de crédito en el tarjetero de escritorio (ver `cardStand.ts`); si no, pieza del organizador. */
+  kind?: "card";
   item: EnvelopeItem;
   index: number;
   /** Lo mueven las transiciones (abrir, regresar, entreabrir). Rotación en orden YXZ. */
@@ -93,6 +95,12 @@ export interface SlotModel {
   deck: SlotDeck;
   /** Encuadre con la pieza presentada: ella al centro y el organizador todavía a la vista. */
   presentFrame: (index: number, count: number) => FrameTarget;
+  /**
+   * Tarjetero de escritorio (tarjetas de crédito): acabado y dónde va según
+   * cuántas piezas tiene el organizador. `reach` = qué tan adelante se presenta
+   * una tarjeta para librar al organizador.
+   */
+  stand: { finish: "lacquer" | "acrylic"; placement: (count: number, cards: number) => { x: number; z: number; ry: number }; reach: (count: number) => number };
   dispose: () => void;
 }
 

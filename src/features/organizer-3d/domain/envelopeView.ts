@@ -1,4 +1,4 @@
-import type { Account, Envelope, EnvelopeBudget, EnvelopeIcon, Movement } from "@/features/ledger/domain/types";
+import type { Account, Envelope, EnvelopeBudget, EnvelopeIcon } from "@/features/ledger/domain/types";
 import { toneFor } from "./envelopeStyle";
 
 export type { EnvelopeIcon };
@@ -17,9 +17,29 @@ export interface EnvelopeItem {
   /** Saldo en pesos (de solo lectura: lo calcula el libro). */
   amount: number;
   budget?: EnvelopeBudget;
+  /** Es la reserva de una tarjeta de crédito: la carpeta la muestra como tarjeta en el tarjetero. */
+  card?: CardFace;
 }
 
-export function toEnvelopeItem(envelope: Envelope, balanceMinor: number): EnvelopeItem {
+/** Lo que se imprime en la tarjeta del tarjetero. */
+export interface CardFace {
+  /** Nombre de la tarjeta (la cuenta), p. ej. "Nu". */
+  name: string;
+  /** Deuda en pesos. */
+  debt: number;
+}
+
+/** Reserva de cada tarjeta activa: id del sobre → cara de la tarjeta. */
+export function cardFaces(accounts: readonly Account[], debtMinor: Readonly<Record<string, number>>): Map<EnvelopeId, CardFace> {
+  const faces = new Map<EnvelopeId, CardFace>();
+  for (const account of accounts) {
+    if (account.archived || !account.card) continue;
+    faces.set(account.card.reserveEnvelopeId, { name: account.name, debt: (debtMinor[account.id] ?? 0) / 100 });
+  }
+  return faces;
+}
+
+export function toEnvelopeItem(envelope: Envelope, balanceMinor: number, card?: CardFace): EnvelopeItem {
   return {
     id: envelope.id,
     name: envelope.name,
@@ -29,26 +49,17 @@ export function toEnvelopeItem(envelope: Envelope, balanceMinor: number): Envelo
     icon: envelope.icon,
     amount: balanceMinor / 100,
     ...(envelope.budget ? { budget: envelope.budget } : {}),
+    ...(card ? { card } : {}),
   };
 }
 
 /**
- * Sobres que se muestran en la carpeta. La reserva de una tarjeta aparece
- * cuando la tarjeta se usa (o su reserva tiene dinero): una tarjeta recién
- * agregada no llena la carpeta con un sobre vacío.
+ * Sobres que se muestran en el organizador: los activos. Las reservas de
+ * tarjeta se ven siempre: en la carpeta son tarjetas del tarjetero (no ocupan
+ * lugar en la pila de sobres) y en los otros estilos, una pieza más.
  */
-export function visibleEnvelopes(
-  active: readonly Envelope[],
-  accounts: readonly Account[],
-  movements: readonly Movement[],
-  balances: Readonly<Record<string, number>>,
-): Envelope[] {
-  const unusedReserves = new Set(
-    accounts
-      .filter((account) => account.card && !movements.some((movement) => movement.accountId === account.id || movement.toAccountId === account.id || movement.reserveEnvelopeId === account.card?.reserveEnvelopeId || movement.toEnvelopeId === account.card?.reserveEnvelopeId))
-      .map((account) => account.card?.reserveEnvelopeId),
-  );
-  return active.filter((envelope) => !unusedReserves.has(envelope.id) || (balances[envelope.id] ?? 0) !== 0);
+export function visibleEnvelopes(active: readonly Envelope[]): Envelope[] {
+  return [...active];
 }
 
 /** Sobre vecino en la lista (circular). Sin sobre activo, `1` da el primero y `-1` el último. */

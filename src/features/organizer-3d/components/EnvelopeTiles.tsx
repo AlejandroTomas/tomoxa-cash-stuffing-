@@ -16,23 +16,28 @@ interface EnvelopeTilesProps {
 }
 
 /**
+ * Ancho de una ficha en pantallas anchas: el de una fila llena. Caben a lo más
+ * ocho (los sobres activos, más "Nuevo" mientras se pueda crear otro), así que
+ * siempre van en una fila y miden lo mismo, haya los que haya.
+ */
+const tile = "sm:w-[calc((100%-7*var(--gap))/8)]";
+
+/**
  * Fila de sobres (alternativa HTML al lienzo, navegable con teclado). Los
  * colores son datos del sobre, iguales en ambos temas.
  */
 export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, onCreate, className }: EnvelopeTilesProps) {
-  const count = envelopes.length + (onCreate ? 1 : 0);
   return (
     <ul
       aria-label="Sobres"
-      className={cn("grid grid-cols-3 gap-2.5 sm:grid-cols-[repeat(var(--tiles),minmax(0,1fr))] lg:gap-3", className)}
-      // En pantallas anchas, una sola fila con todos los sobres (y la ficha "Nuevo").
-      style={{ ["--tiles" as string]: count }}
+      // Mismo tamaño siempre (ver `tile`), alineadas a la derecha.
+      className={cn("grid grid-cols-3 gap-2.5 [--gap:0.625rem] sm:flex sm:flex-wrap sm:justify-end lg:gap-3 lg:[--gap:0.75rem]", className)}
     >
       {envelopes.map((envelope) => {
         const Icon = ENVELOPE_ICONS[envelope.icon];
         const selected = envelope.id === selectedId;
         return (
-          <li key={envelope.id}>
+          <li key={envelope.id} className={tile}>
             <button
               type="button"
               aria-pressed={selected}
@@ -61,7 +66,7 @@ export function EnvelopeTiles({ envelopes, selectedId, busy, onSelect, onCreate,
         );
       })}
       {onCreate && (
-        <li>
+        <li className={tile}>
           <button
             type="button"
             disabled={busy}

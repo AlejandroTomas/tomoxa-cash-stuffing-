@@ -16,6 +16,8 @@ import {
   drawerRest,
   drawerSize,
   rowsFor,
+  cabinetStandPlacement,
+  cabinetStandReach,
 } from "./cabinetLayout";
 
 /** Plástico lacado de la carcasa (rosa empolvado) y su interior, un tono más hondo. */
@@ -193,6 +195,7 @@ export function createCabinetModel(runtime: SceneRuntime): SlotModel {
     frame: cabinetFrame,
     presentFrame: (_index, count) => cabinetPresentFrame(count),
     deck: drawerDeck(),
+    stand: { finish: "lacquer", placement: cabinetStandPlacement, reach: () => cabinetStandReach() },
     dispose: () => {
       disposeShell();
       Object.values(geo).forEach((geometry) => geometry.dispose());

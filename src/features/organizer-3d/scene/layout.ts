@@ -158,3 +158,73 @@ export function fanTop(count: number = DOCUMENT.maxFan): number {
  * del sobre, así pasa por delante sin tocarlos y nadie más se mueve.
  */
 export const DOCUMENT_TRAVEL_Y = Math.max(fanTop(), ENVELOPE.height / 2) + DOCUMENT.height / 2 + 0.06;
+
+/**
+ * Tarjeta de crédito del tarjetero (la reserva de una tarjeta). Mide como un
+ * sobre al presentarse; en su bolsillo se ve a escala `WALLET.scale`.
+ */
+export const CARD = { width: 3.4, height: 2.14, depth: 0.024, radius: 0.18 } as const;
+
+/**
+ * Tarjetero en el interior de la tapa delantera (coordenadas de la tapa:
+ * x = 0 en el lomo, +Y arriba, -Z = cara interior, hacia la cámara con la tapa
+ * abierta). Bolsillos escalonados como en una cartera: de cada tarjeta asoma
+ * su franja superior; el bolsillo de abajo queda por delante del de arriba.
+ */
+export const WALLET = {
+  scale: 0.8,
+  /** Centro de las tarjetas (deja libre la banda porta pluma junto al lomo). */
+  x: 2.62,
+  /** Borde superior de la primera tarjeta. */
+  topY: 2.3,
+  /** Fondo de los bolsillos. */
+  bottomY: -2.45,
+  /** Separación vertical cómoda entre tarjetas. */
+  step: 0.62,
+  /** Cuánto asoma cada tarjeta por encima de su bolsillo. */
+  peek: 0.5,
+  /** Centro de la primera tarjeta en Z y cuánto avanza cada una hacia la cámara. */
+  firstZ: -0.09,
+  depthStep: 0.046,
+  pocketWidth: 3.0,
+  pocketDepth: 0.016,
+  /** Bolsillos que se ven aunque haya menos tarjetas (un tarjetero vacío también tiene ranuras). */
+  minPockets: 3,
+} as const;
+
+const cardH = () => CARD.height * WALLET.scale;
+
+/** Bolsillos que dibuja el tarjetero para `count` tarjetas. */
+export const pocketCount = (count: number) => Math.max(count, WALLET.minPockets);
+
+/** Separación vertical para `count` tarjetas: con muchas se aprietan para no salir del tarjetero. */
+export function walletStep(count: number): number {
+  const n = pocketCount(count);
+  if (n <= 1) return WALLET.step;
+  return Math.min(WALLET.step, (WALLET.topY - WALLET.bottomY - cardH() - 0.15) / (n - 1));
+}
+
+export interface WalletPose {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Centro de la tarjeta `index` en su bolsillo. */
+export function walletSlot(index: number, count: number): WalletPose {
+  const top = WALLET.topY - index * walletStep(count);
+  return { x: WALLET.x, y: top - cardH() / 2, z: WALLET.firstZ - index * WALLET.depthStep };
+}
+
+/** Bolsillo `index`: de su borde superior (un poco abajo del de la tarjeta) al fondo, delante de su tarjeta. */
+export function pocketRect(index: number, count: number): { x: number; y: number; z: number; width: number; height: number } {
+  const slot = walletSlot(index, count);
+  const top = slot.y + cardH() / 2 - WALLET.peek;
+  return { x: WALLET.x, y: (top + WALLET.bottomY) / 2, z: slot.z - 0.02, width: WALLET.pocketWidth, height: top - WALLET.bottomY };
+}
+
+/** Tarjeta fuera de su bolsillo, en el mismo plano: su borde inferior libra el bolsillo. */
+export function walletExit(index: number, count: number): WalletPose {
+  const slot = walletSlot(index, count);
+  return { ...slot, y: slot.y + cardH() - WALLET.peek + 0.18 };
+}

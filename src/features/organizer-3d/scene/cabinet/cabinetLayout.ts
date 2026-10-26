@@ -1,3 +1,4 @@
+import { standSize, type StandPlacement } from "../cardStandLayout";
 import { DOCUMENT } from "../layout";
 import { apparentSize, facing, normalize, type FrameKind, type FrameTarget, type Pose, type SlotDeck, type Vec3 } from "../slotModel";
 
@@ -193,3 +194,14 @@ export function drawerDeck(): SlotDeck {
     reading: { x: 0, y: 0.95, z: 0.75, scale: 0.95 },
   };
 }
+
+// ── Tarjetero de escritorio ─────────────────────────────────────────────────
+
+/** A la izquierda de la cajonera (del lado de la cámara), a la altura de su centro y girado hacia ella. */
+export function cabinetStandPlacement(count: number, cards: number): StandPlacement {
+  const stand = standSize(cards);
+  return { x: -cabinetSize(count).x / 2 - stand.x / 2 - 0.35, z: 0.1, ry: facing(CABINET_VIEW).ry * 0.5 };
+}
+
+/** Qué tan adelante del tarjetero se presenta una tarjeta: delante de la cara de la cajonera. */
+export const cabinetStandReach = () => (CABINET.depth / 2 + 1.2) / CABINET_VIEW.z;
