@@ -1,7 +1,8 @@
 import { createSelector } from "@reduxjs/toolkit";
 
 import type { RootState } from "@/store";
-import { computeBalances, overdrawn, totalCash, unbackedDebt } from "./domain/balances";
+import { computeBalances, moneyBreakdown, overdrawn, totalCash, unbackedDebt } from "./domain/balances";
+import { UNASSIGNED_ENVELOPE_ID } from "./domain/envelopes";
 import { budgetStatus, type BudgetStatus } from "./domain/budget";
 import { cardSummaries } from "./domain/cards";
 import { deferredByCard, installmentPlans } from "./domain/installments";
@@ -23,6 +24,9 @@ export const selectActiveEnvelopes = createSelector(selectEnvelopes, (envelopes)
 export const selectBalances = createSelector([selectAccounts, selectEnvelopes, selectMovements], (accounts, envelopes, movements) =>
   computeBalances({ accounts, envelopes, movements }),
 );
+
+/** Desglose de Disponible: tu dinero (por cuenta) = apartado en sobres + sin repartir. */
+export const selectMoneyBreakdown = createSelector([selectAccounts, selectBalances], (accounts, balances) => moneyBreakdown(accounts, balances, UNASSIGNED_ENVELOPE_ID));
 
 /** Compras a meses vigentes con su avance. `today` = "YYYY-MM-DD". */
 export const selectInstallmentPlans = createSelector(

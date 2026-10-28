@@ -87,6 +87,35 @@ export function computeBalances({ accounts, envelopes, movements }: LedgerSnapsh
 /** Dinero real disponible: suma de cuentas de débito y efectivo. */
 export const totalCash = (balances: Balances) => Object.values(balances.accounts).reduce((sum, value) => sum + value, 0);
 
+/** Desglose de Disponible: tu dinero real, lo apartado en sobres y lo que queda sin repartir. Centavos. */
+export interface MoneyBreakdown {
+  /** Cuentas de débito y efectivo (sin tarjetas de crédito), con su saldo. */
+  accounts: { id: string; name: string; amountMinor: number }[];
+  /** Suma de esas cuentas: todo tu dinero real. */
+  totalMinor: number;
+  /** En los demás sobres (incluye lo reservado para pagar tarjetas). */
+  assignedMinor: number;
+  /** En Disponible: lo que todavía no repartes. */
+  unassignedMinor: number;
+}
+
+/**
+ * `totalMinor = assignedMinor + unassignedMinor` siempre: todo peso que entra a
+ * una cuenta entra también a un sobre (Disponible), y moverlo entre sobres no
+ * toca las cuentas.
+ */
+export function moneyBreakdown(accounts: readonly Account[], balances: Balances, unassignedId: string): MoneyBreakdown {
+  const cashAccounts = accounts
+    .filter((account) => account.kind !== "credit")
+    .map((account) => ({ id: account.id, name: account.name, amountMinor: balances.accounts[account.id] ?? 0, archived: account.archived }))
+    // Una cuenta archivada solo se muestra si todavía tiene dinero.
+    .filter((account) => !account.archived || account.amountMinor !== 0)
+    .map(({ id, name, amountMinor }) => ({ id, name, amountMinor }));
+  const unassignedMinor = balances.envelopes[unassignedId] ?? 0;
+  const assignedMinor = Object.entries(balances.envelopes).reduce((sum, [id, value]) => (id === unassignedId ? sum : sum + value), 0);
+  return { accounts: cashAccounts, totalMinor: totalCash(balances), assignedMinor, unassignedMinor };
+}
+
 /** Lo que falta en sobres sobregirados (suma de saldos negativos, en positivo). */
 export const overdrawn = (balances: Balances) => Object.values(balances.envelopes).reduce((sum, value) => sum + Math.max(0, -value), 0);
 

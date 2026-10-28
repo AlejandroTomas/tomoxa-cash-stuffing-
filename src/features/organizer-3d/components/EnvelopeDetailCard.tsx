@@ -1,11 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, ArrowLeftRight, FolderOpen, Gauge, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Pencil, Plus, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, FolderOpen, Gauge, ReceiptText, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Ellipsis, Landmark, Mails, Pencil, Plus, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import type { MoneyBreakdown } from "@/features/ledger/domain/balances";
 import { BUDGET_PERIOD_LABELS, type BudgetStatus } from "@/features/ledger/domain/budget";
 import type { EnvelopeActivity } from "../domain/document";
 import { parseLocalDate } from "@/utils/localDate";
@@ -31,6 +32,8 @@ interface EnvelopeDetailCardProps {
   activity: EnvelopeActivity;
   /** Presupuesto del periodo actual (si el sobre tiene). */
   budget?: BudgetStatus;
+  /** Solo en Disponible: de dónde sale su saldo (tu dinero − lo apartado en sobres). */
+  breakdown?: MoneyBreakdown;
   /** Propone apartar en el sobre lo que falta para su presupuesto. */
   onFund: (amountMinor: number) => void;
   onMoveMoney: () => void;
@@ -49,7 +52,7 @@ interface EnvelopeDetailCardProps {
 export const glass = "border border-card/70 bg-card/60 shadow-xl shadow-foreground/5 backdrop-blur-xl";
 
 /** Tarjeta de vidrio con el detalle del sobre seleccionado. */
-export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onOpenEnvelope, onStep, onBack, className }: EnvelopeDetailCardProps) {
+export function EnvelopeDetailCard({ item, envelopes, activity, budget, breakdown, onFund, onMoveMoney, onRecord, onEdit, onArchive, stage, busy, onOpenEnvelope, onStep, onBack, className }: EnvelopeDetailCardProps) {
   const reduceMotion = useReducedMotion();
   const Icon = ENVELOPE_ICONS[item.icon];
   const index = envelopes.findIndex((envelope) => envelope.id === item.id);
@@ -104,11 +107,15 @@ export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, 
           </div>
 
           <dl className="mt-4 divide-y divide-border/70 rounded-2xl border border-card/70 bg-card/70 px-4 text-sm">
-            <div className="flex items-center gap-3 py-3">
-              <CircleDollarSign className="size-4.5 text-muted-foreground" aria-hidden="true" />
-              <dt className="flex-1 text-foreground/80">Total en sobre</dt>
-              <dd className={cn("font-medium tabular-nums", overdrawn ? "text-destructive" : "text-foreground")}>{formatAmount(item.amount)}</dd>
-            </div>
+            {breakdown ? (
+              <BreakdownRows breakdown={breakdown} />
+            ) : (
+              <div className="flex items-center gap-3 py-3">
+                <CircleDollarSign className="size-4.5 text-muted-foreground" aria-hidden="true" />
+                <dt className="flex-1 text-foreground/80">Total en sobre</dt>
+                <dd className={cn("font-medium tabular-nums", overdrawn ? "text-destructive" : "text-foreground")}>{formatAmount(item.amount)}</dd>
+              </div>
+            )}
             <div className="flex items-center gap-3 py-3">
               <Plus className="size-4.5 rounded-sm border border-muted-foreground/60 p-px text-muted-foreground" aria-hidden="true" />
               <dt className="flex-1 text-foreground/80">Movimientos</dt>
@@ -177,6 +184,54 @@ export function EnvelopeDetailCard({ item, envelopes, activity, budget, onFund, 
 }
 
 const pesos = (minor: number) => formatAmount(minor / 100);
+
+/**
+ * Disponible no es todo tu dinero: es lo que todavía no repartes. Tu dinero
+ * (débito + efectivo) = lo apartado en los sobres + lo que queda aquí.
+ */
+function BreakdownRows({ breakdown }: { breakdown: MoneyBreakdown }) {
+  const negative = breakdown.unassignedMinor < 0;
+  return (
+    <>
+      <div className="py-3">
+        <div className="flex items-center gap-3">
+          <Landmark className="size-4.5 text-muted-foreground" aria-hidden="true" />
+          <dt className="flex-1 text-foreground/80">Tu dinero</dt>
+          <dd className="font-medium text-foreground tabular-nums">{pesos(breakdown.totalMinor)}</dd>
+        </div>
+        {breakdown.accounts.length > 0 && (
+          <div className="mt-2 pl-7.5">
+            <p className="text-xs text-muted-foreground">Deberías tener (compáralo con tu cartera y tu banco):</p>
+            <ul className="mt-1 space-y-0.5 text-sm" aria-label="Lo que deberías tener en cada cuenta">
+              {breakdown.accounts.map((account) => (
+                <li key={account.id} className="flex justify-between gap-3">
+                  <span className="truncate text-foreground/80">{account.name}</span>
+                  <span className={cn("font-medium tabular-nums", account.amountMinor < 0 ? "text-destructive" : "text-foreground")}>{pesos(account.amountMinor)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-3 py-3">
+        <Mails className="size-4.5 text-muted-foreground" aria-hidden="true" />
+        <dt className="flex-1 text-foreground/80">
+          Apartado en sobres
+          <span className="block text-xs text-muted-foreground">Incluye lo reservado para tus tarjetas</span>
+        </dt>
+        <dd className="font-medium text-foreground tabular-nums">− {pesos(breakdown.assignedMinor)}</dd>
+      </div>
+      <div className="flex items-center gap-3 py-3">
+        <CircleDollarSign className="size-4.5 text-muted-foreground" aria-hidden="true" />
+        <dt className="flex-1 font-medium text-foreground">Sin repartir</dt>
+        <dd className={cn("font-semibold tabular-nums", negative ? "text-destructive" : "text-foreground")}>= {pesos(breakdown.unassignedMinor)}</dd>
+      </div>
+      <p className="py-3 text-xs leading-snug text-muted-foreground">
+        Al apartar en un sobre baja Disponible; al gastar desde ese sobre bajan el sobre y la cuenta con la que pagaste, no Disponible.
+      </p>
+    </>
+  );
+}
 
 /** Gastado contra presupuesto en el periodo, con barra y atajo para apartar lo que falta. */
 function BudgetRow({ budget, busy, onFund }: { budget: BudgetStatus; busy: boolean; onFund: (amountMinor: number) => void }) {

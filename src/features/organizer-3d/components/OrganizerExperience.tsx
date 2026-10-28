@@ -11,7 +11,7 @@ import { RecordMovementDialog, type RecordDefaults } from "@/features/ledger/com
 import { usePaymentReminders } from "@/features/ledger/components/PaymentReminders";
 import { MAX_ACTIVE_ENVELOPES, UNASSIGNED_ENVELOPE_ID } from "@/features/ledger/domain/envelopes";
 import { paymentDueSoon } from "@/features/ledger/domain/cards";
-import { selectCardSummaries, selectLedgerHealth } from "@/features/ledger/selector";
+import { selectCardSummaries, selectLedgerHealth, selectMoneyBreakdown } from "@/features/ledger/selector";
 import { toLocalIsoDate } from "@/utils/localDate";
 import { useAppSelector } from "@/hooks/useReduxHooks";
 import type { MovementDraft } from "@/features/ledger/domain/validation";
@@ -90,6 +90,7 @@ export function OrganizerExperience() {
   const [today] = useState(() => toLocalIsoDate(new Date()));
   const health = useAppSelector((state) => selectLedgerHealth(state, today));
   const cardSummaries = useAppSelector((state) => selectCardSummaries(state, today));
+  const breakdown = useAppSelector(selectMoneyBreakdown);
   const cardDue = cardSummaries.some((card) => paymentDueSoon(card.statement));
   const installmentDue = cardSummaries.some((card) => card.plans.some((plan) => plan.nextDue));
   // Un aviso por tema; si hay más de uno, se cuentan (el detalle está en Cuentas).
@@ -275,6 +276,7 @@ export function OrganizerExperience() {
                   envelopes={envelopes}
                   activity={activityFor(item.id)}
                   budget={budgets[item.id]}
+                  breakdown={item.id === UNASSIGNED_ENVELOPE_ID ? breakdown : undefined}
                   onFund={(amountMinor) => openCover(item.id, amountMinor, true)}
                   onMoveMoney={() => {
                     setCover(null);
